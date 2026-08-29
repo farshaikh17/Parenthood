@@ -238,6 +238,8 @@ export const ParentStatusScreen: React.FC<ParentStatusScreenProps> = ({
         </div>
       )}
 
+      <p className="text-[10px] text-stone-500 px-1">Scores and percentages here are reflective tools built from the simulation, not a measure of whether anyone is ready to be a parent.</p>
+
       {/* What the baby has learned — from records only */}
       <div className="p-4 rounded-2xl bg-stone-800/40 border border-stone-700/60 space-y-2">
         <span className="text-xs font-bold text-stone-200 block">What {baby ? baby.name : 'the baby'} has learned about you</span>

@@ -9,6 +9,7 @@ import { getDayLog, summarizeDay } from '../simulation/dayLog';
 import { MILESTONE_NOTES } from '../content/copy';
 import { formatDevelopmentalAge, getDevelopmentalAgeDays } from '../simulation/clock';
 import { buildMemorySummary, memoryToSentences } from '../simulation/memory';
+import { buildWeekSummaries } from '../simulation/report';
 import { 
   BookOpen, 
   Sparkles, 
@@ -46,7 +47,8 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
   simulatedTimeMs,
   onAddJournalEntry
 }) => {
-  const [activeTab, setActiveTab] = useState<'journal' | 'milestones'>('journal');
+  const [activeTab, setActiveTab] = useState<'journal' | 'milestones' | 'weeks'>('journal');
+  const weeks = buildWeekSummaries(dayLogs, recentEvents, milestones, baby);
   const [isGeneratingAI, setIsGeneratingAI] = useState<boolean>(false);
   const [parentNote, setParentNote] = useState<string>('');
 
@@ -142,14 +144,22 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
       </div>
 
       {/* Tabs */}
-      <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-stone-950 border border-stone-800 text-xs font-semibold">
+      <div className="grid grid-cols-3 gap-2 p-1 rounded-2xl bg-stone-950 border border-stone-800 text-xs font-semibold">
+        <button
+          onClick={() => setActiveTab('weeks')}
+          className={`py-2 rounded-xl transition-all ${
+            activeTab === 'weeks' ? 'bg-teal-700 text-white shadow-sm' : 'text-stone-400 hover:text-stone-200'
+          }`}
+        >
+          Weeks ({weeks.length})
+        </button>
         <button
           onClick={() => setActiveTab('journal')}
           className={`py-2 rounded-xl transition-all ${
             activeTab === 'journal' ? 'bg-teal-700 text-white shadow-sm' : 'text-stone-400 hover:text-stone-200'
           }`}
         >
-          Daily Reflections ({journalEntries.length})
+          Days ({journalEntries.length})
         </button>
         <button
           onClick={() => setActiveTab('milestones')}
@@ -242,6 +252,34 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
             )}
           </div>
 
+        </div>
+      )}
+
+      {/* Tab: week summaries — computed from the day log only */}
+      {activeTab === 'weeks' && (
+        <div className="space-y-3">
+          {weeks.length === 0 ? (
+            <div className="p-6 text-center text-stone-500 text-xs rounded-2xl border border-dashed border-stone-800">
+              Week summaries appear after the first day.
+            </div>
+          ) : (
+            weeks.slice().reverse().map(w => (
+              <div key={w.weekIndex} className="p-4 rounded-2xl bg-stone-800/40 border border-stone-700/60 space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-stone-200">Week {w.weekIndex + 1}</span>
+                  <span className="text-[10px] text-stone-500 font-mono">{w.days} day{w.days === 1 ? '' : 's'}</span>
+                </div>
+                <p className="text-[11px] text-stone-300">
+                  {w.feeds} feeds • {w.diaperChanges} changes • {w.sleepHoursPerDay} h sleep/day • {w.cryingMinutesPerDay} min crying/day • {w.nightWakings} night wakings
+                </p>
+                <p className="text-[10px] text-stone-500">
+                  You: {w.userActions} actions • while away: {w.autopilotActions} • average stress {w.avgParentStress}%
+                </p>
+                {w.milestones.length > 0 && <p className="text-[10px] text-teal-300">Milestones: {w.milestones.join(', ')}</p>}
+                {w.notableEvents.length > 0 && <p className="text-[10px] text-amber-300/90">{w.notableEvents.join(' · ')}</p>}
+              </div>
+            ))
+          )}
         </div>
       )}
 
