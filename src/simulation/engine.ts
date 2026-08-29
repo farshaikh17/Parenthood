@@ -19,10 +19,10 @@ import {
   SimulationSettings, 
   UserProfile 
 } from '../types';
-import { TEMPERAMENTS } from './initialData';
 import { EVENT_NOTES, MILESTONE_NOTES } from '../content/copy';
 import { formatVolume } from '../utils/units';
 import { advanceDevelopmentalAge, DEFAULT_COMPRESSION_SCHEDULE, getDevelopmentalAgeDays } from './clock';
+import { describeBaby, driftAfterSleepAction, ensurePersonality, preferredCaregiver } from './personality';
 
 /** Stable-enough IDs based on simulation time (not wall clock) plus a short random suffix. */
 export function makeId(prefix: string, simTime: number): string {
@@ -109,7 +109,12 @@ export class SimulationEngine {
     newEvents: SimulationEvent[];
     updatedMilestones: Milestone[];
   } {
-    const tempConfig = TEMPERAMENTS[baby.temperament] || TEMPERAMENTS.easygoing;
+    const personality = ensurePersonality(baby);
+    const tempConfig = {
+      soothabilityMultiplier: personality.soothability,
+      hungerToleranceMultiplier: personality.hungerTolerance,
+      sleepCycleDurationMinutes: 50 * personality.sleepCycleFactor
+    };
     const diffMultiplier = settings.difficulty === 'hardcore' ? 1.35 : 1.0;
     
     // Delta in simulated minutes
@@ -119,7 +124,7 @@ export class SimulationEngine {
     }
 
     const nextState: BabyState = { ...state };
-    const nextBaby: Baby = { ...baby };
+    const nextBaby: Baby = { ...baby, personality };
     let nextParents = parents.map(p => ({ ...p }));
     const newEvents: SimulationEvent[] = [];
     const updatedMilestones = milestones.map(m => ({ ...m }));
@@ -186,7 +191,7 @@ export class SimulationEngine {
       const restedness = Math.max(0, (40 - nextState.sleepiness) / 40); // 0 when sleepiness ≥ 40, 1 when fully rested
       const regressionPenalty = isSleepRegression ? 0.35 : 0;
       // Daytime naps end readily once rested; at night, babies mostly link cycles until hungry or the stretch is used up
-      const nightBase = stage === 'newborn' ? 0.08 : stage === 'social_infant' ? 0.05 : 0.03;
+      const nightBase = (stage === 'newborn' ? 0.08 : stage === 'social_infant' ? 0.05 : 0.03) + personality.sensitivity * 0.04;
       const wakeChance = isNighttime ? (nightBase + restedness * 0.12 + regressionPenalty) : (0.25 + restedness * 0.6 + regressionPenalty);
       const naturalWake = atCycleBoundary && (Math.random() < wakeChance || nextState.sleepMinutesElapsed >= maxStretch);
 
@@ -455,6 +460,7 @@ export class SimulationEngine {
   ): {
     nextState: BabyState;
     nextParents: Parent[];
+    nextBaby: Baby;
     record: CareActionRecord;
     feedbackMessage: string;
     resolvedEventIds?: string[];
@@ -464,7 +470,8 @@ export class SimulationEngine {
     const nextState = { ...state };
     let nextParents = parents.map(p => ({ ...p }));
     const simTime = settings.simulatedTimeMs;
-    const tempConfig = TEMPERAMENTS[baby.temperament] || TEMPERAMENTS.easygoing;
+    let personality = ensurePersonality(baby);
+    const tempConfig = { soothabilityMultiplier: personality.soothability };
     const ageDays = getDevelopmentalAgeDays(baby);
     const stage = SimulationEngine.getDevelopmentalStage(ageDays);
 
@@ -480,6 +487,10 @@ export class SimulationEngine {
 
     let caregiverComfortBonus = 0;
     let caregiverConfidenceBonus = 0;
+
+    // A baby who has come to settle best with one caregiver is a little harder for the other to settle when very upset
+    const pref = isAutopilot ? null : preferredCaregiver(state, parents);
+    const nonPreferredPenalty = pref && pref.parent.id !== activeParentId && state.comfort < 40 ? 0.85 : 1.0;
 
     if (isSoothingAction && currentAffinity > 50) {
       // Modest comfort bonus (+1 to +6)
@@ -559,16 +570,19 @@ export class SimulationEngine {
 
       case 'rock':
       case 'cuddle': {
-        const soothingBoost = Math.round(35 * tempConfig.soothabilityMultiplier);
+        const soothingBoost = Math.round(35 * tempConfig.soothabilityMultiplier * nonPreferredPenalty);
         nextState.comfort = Math.min(100, nextState.comfort + soothingBoost);
         nextState.lastSootherTimestamp = simTime;
         nextState.cryingMinutesContinuous = Math.max(0, nextState.cryingMinutesContinuous - 5);
 
         // If very sleepy and comfortable, might drift to sleep
-        if (nextState.sleepiness > 55 && nextState.hunger < 55 && nextState.gasDiscomfort < 40) {
+        // Babies used to being held fall asleep in arms more readily
+        const heldThreshold = 55 - (personality.heldToSleepHabit - 30) * 0.2;
+        if (nextState.sleepiness > heldThreshold && nextState.hunger < 55 && nextState.gasDiscomfort < 40) {
           nextState.isSleeping = true;
           nextState.sleepMinutesElapsed = 0;
           nextState.mood = 'sleeping_light';
+          personality = driftAfterSleepAction(personality, 'held_to_sleep');
           feedback = `${baby.name} relaxed against your chest and drifted off to sleep.`;
           effectiveness = 'excellent';
         } else {
@@ -591,12 +605,22 @@ export class SimulationEngine {
           feedback = `${baby.name} is wide awake and looks around. Not ready for sleep yet.`;
           effectiveness = 'ineffective';
         } else {
-          nextState.isSleeping = true;
-          nextState.sleepMinutesElapsed = 0;
-          nextState.comfort = Math.min(100, nextState.comfort + 10);
-          feedback = `Put ${baby.name} down on their back in the cot. They drifted off.`;
-          effectiveness = 'excellent';
-          deltaSummary.sleepiness = 0;
+          // Settling in the cot is a learned thing: a baby usually held to sleep protests more; practice makes it easier
+          const cotSkill = personality.settleInCotSkill - personality.heldToSleepHabit * 0.5;
+          const refuseChance = Math.max(0.05, Math.min(0.6, 0.35 - cotSkill / 200 - (nextState.sleepiness - 50) / 200));
+          if (Math.random() < refuseChance && !isAutopilot) {
+            personality = driftAfterSleepAction(personality, 'put_to_sleep_fail');
+            feedback = `Put ${baby.name} down — they startled awake and started fussing as soon as your hands left them.`;
+            effectiveness = 'ineffective';
+          } else {
+            nextState.isSleeping = true;
+            nextState.sleepMinutesElapsed = 0;
+            nextState.comfort = Math.min(100, nextState.comfort + 10);
+            personality = driftAfterSleepAction(personality, 'put_to_sleep_ok');
+            feedback = `Put ${baby.name} down on their back in the cot. They drifted off.`;
+            effectiveness = 'excellent';
+            deltaSummary.sleepiness = 0;
+          }
         }
         break;
       }
@@ -638,7 +662,7 @@ export class SimulationEngine {
           if (nextState.diaperSoiled > 50) cues.push(`nappy feels ${nextState.diaperType === 'dirty' || nextState.diaperType === 'both' ? 'dirty' : 'wet'}`);
           if (cues.length === 0) cues.push('calm and alert, looking around');
         }
-        feedback = `You watch ${baby.name} for a moment: ${cues.join('; ')}.`;
+        feedback = `${describeBaby(baby, nextState, stage)} You watch ${baby.name} for a moment: ${cues.join('; ')}.`;
         effectiveness = 'moderate';
         break;
       }
@@ -740,6 +764,7 @@ export class SimulationEngine {
     return {
       nextState,
       nextParents,
+      nextBaby: { ...baby, personality },
       record,
       feedbackMessage: feedback
     };

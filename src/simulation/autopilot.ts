@@ -149,6 +149,7 @@ export function runAwayCatchup(input: AwayCatchupInput, nowRealMs: number): Away
     const applied = SimulationEngine.applyAction(action, baby, state, parents, activeParentId, settings, params, { source: 'autopilot' });
     state = applied.nextState;
     parents = applied.nextParents;
+    baby = applied.nextBaby;
     actions = [applied.record, ...actions];
     dayLogs = accumulateAction(dayLogs, ageDays, applied.record);
     minutesSinceLastAutopilot = 0;
