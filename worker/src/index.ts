@@ -18,6 +18,7 @@
 
 export interface Env {
   ALERTS: KVNamespace;
+  DB: D1Database; // household sync (see schema.sql)
   VAPID_PUBLIC_KEY: string;
   VAPID_PRIVATE_KEY: string; // secret (wrangler secret put VAPID_PRIVATE_KEY)
   VAPID_SUBJECT: string;
@@ -36,6 +37,8 @@ interface ScheduledAlert {
 }
 
 const MAX_ALERTS = 5;
+const MAX_SNAPSHOT_BYTES = 2_000_000;
+const CODE_RE = /^[A-Z0-9]{4}-[A-Z0-9]{4}$/;
 const MAX_AHEAD_MS = 24 * 3600 * 1000;
 const SUB_TTL_SECONDS = 60 * 24 * 3600; // subscriptions expire after 60 quiet days
 
@@ -140,7 +143,7 @@ function corsHeaders(req: Request, env: Env): Record<string, string> {
   const ok = allowed.includes(origin) || allowed.includes('*');
   return {
     'Access-Control-Allow-Origin': ok ? origin : 'null',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Vary': 'Origin'
   };
@@ -160,9 +163,53 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     const url = new URL(req.url);
     if (req.method === 'GET' && url.pathname === '/') return json({ ok: true, service: 'parenthood-night-alerts' }, 200, cors);
-    if (req.method !== 'POST') return json({ error: 'method' }, 405, cors);
     if (cors['Access-Control-Allow-Origin'] === 'null') return json({ error: 'origin not allowed' }, 403, cors);
 
+    // ---------- household sync (M8) ----------
+    const syncMatch = url.pathname.match(/^\/sync\/([A-Z0-9-]{9})$/);
+    if (syncMatch) {
+      const code = syncMatch[1];
+      if (!CODE_RE.test(code)) return json({ error: 'bad code' }, 400, cors);
+      if (!env.DB) return json({ error: 'sync not enabled on this server' }, 501, cors);
+      if (req.method === 'GET') {
+        const since = Number(url.searchParams.get('since') || 0);
+        const row = await env.DB.prepare('SELECT version, snapshot FROM households WHERE code = ?').bind(code).first<{ version: number; snapshot: string }>();
+        if (!row) return json({ error: 'not found' }, 404, cors);
+        if (row.version <= since) return new Response(null, { status: 304, headers: cors });
+        return new Response(JSON.stringify({ version: row.version, snapshot: JSON.parse(row.snapshot) }), { status: 200, headers: { 'Content-Type': 'application/json', ...cors } });
+      }
+      if (req.method === 'PUT') {
+        let body: any;
+        try { body = await req.json(); } catch { return json({ error: 'bad json' }, 400, cors); }
+        const baseVersion = Number(body?.baseVersion ?? -1);
+        if (!Number.isInteger(baseVersion) || baseVersion < 0 || !body?.snapshot?.data || !body?.snapshot?.meta) return json({ error: 'bad body' }, 400, cors);
+        const text = JSON.stringify(body.snapshot);
+        if (text.length > MAX_SNAPSHOT_BYTES) return json({ error: 'snapshot too large' }, 413, cors);
+        const now = Date.now();
+        if (body.create === true) {
+          try {
+            await env.DB.prepare('INSERT INTO households (code, version, snapshot, updated_at) VALUES (?, 1, ?, ?)').bind(code, text, now).run();
+            return json({ ok: true, version: 1 }, 200, cors);
+          } catch {
+            const cur = await env.DB.prepare('SELECT version, snapshot FROM households WHERE code = ?').bind(code).first<{ version: number; snapshot: string }>();
+            return json({ error: 'exists', version: cur?.version ?? 0, snapshot: cur ? JSON.parse(cur.snapshot) : null }, 409, cors);
+          }
+        }
+        // compare-and-set: only the writer who saw the current version may replace it
+        const r = await env.DB.prepare('UPDATE households SET version = version + 1, snapshot = ?, updated_at = ? WHERE code = ? AND version = ?').bind(text, now, code, baseVersion).run();
+        if (r.meta.changes === 1) return json({ ok: true, version: baseVersion + 1 }, 200, cors);
+        const cur = await env.DB.prepare('SELECT version, snapshot FROM households WHERE code = ?').bind(code).first<{ version: number; snapshot: string }>();
+        if (!cur) return json({ error: 'not found' }, 404, cors);
+        return json({ error: 'conflict', version: cur.version, snapshot: JSON.parse(cur.snapshot) }, 409, cors);
+      }
+      if (req.method === 'DELETE') {
+        await env.DB.prepare('DELETE FROM households WHERE code = ?').bind(code).run();
+        return json({ ok: true }, 200, cors);
+      }
+      return json({ error: 'method' }, 405, cors);
+    }
+
+    if (req.method !== 'POST') return json({ error: 'method' }, 405, cors);
     let data: any;
     try { data = await req.json(); } catch { return json({ error: 'bad json' }, 400, cors); }
     if (!validUserId(data?.userId)) return json({ error: 'bad userId' }, 400, cors);
@@ -227,5 +274,9 @@ export default {
     });
     ctx.waitUntil(Promise.all(work));
     await Promise.all(work);
+    // Households nobody has touched for 60 days are removed (the phones still keep their own local copies).
+    if (env.DB && new Date(now).getMinutes() === 0) {
+      try { await env.DB.prepare('DELETE FROM households WHERE updated_at < ?').bind(now - 60 * 86400000).run(); } catch {}
+    }
   }
 };
