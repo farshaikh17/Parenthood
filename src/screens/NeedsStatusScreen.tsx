@@ -19,7 +19,7 @@ import {
   Utensils
 } from 'lucide-react';
 import { EducationalCard } from '../components/EducationalCard';
-import { EDUCATIONAL_TOPICS } from '../content/copy';
+import { EDUCATIONAL_TOPICS, HEALTH_NOTE } from '../content/copy';
 import { getDevelopmentalStage, SOLIDS_MIN_AGE_DAYS } from '../simulation/engine';
 import { getDevelopmentalAgeDays } from '../simulation/clock';
 
@@ -42,7 +42,7 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
 }) => {
   const ageDays = getDevelopmentalAgeDays(baby);
   const stage = getDevelopmentalStage(ageDays);
-  void stage; void simulatedTimeMs;
+  void stage;
 
   return (
     <div className="flex-1 p-4 space-y-4 text-stone-100 overflow-y-auto animate-in fade-in duration-200">
@@ -228,6 +228,21 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
         </div>
 
       </div>
+
+      {/* Minimal, honest health: only mild episodes, described by what you'd notice */}
+      {babyState.healthState !== 'healthy' && (babyState.healthUntil || 0) > simulatedTimeMs && (
+        <div className="p-3.5 rounded-2xl bg-amber-950/30 border border-amber-800/50 space-y-1">
+          <span className="text-xs font-bold text-amber-200 block">
+            {babyState.healthState === 'sniffles' ? 'A snuffly few days' : 'An unsettled tummy'}
+          </span>
+          <p className="text-[11px] text-stone-300 leading-relaxed">
+            {babyState.healthState === 'sniffles'
+              ? `${baby.name} is blocked up: feeds are short and broken and sleep is lighter. It passes on its own in the simulation.`
+              : `${baby.name} is windy and uncomfortable today. Burping and holding upright help a little.`}
+          </p>
+        </div>
+      )}
+      {babyState.healthState !== 'healthy' && <EducationalCard item={HEALTH_NOTE} />}
 
       {/* Growth & Development Tracking */}
       <div className="p-4 rounded-2xl bg-stone-800/40 border border-stone-700/60 space-y-3">
