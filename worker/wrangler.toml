@@ -18,3 +18,12 @@ VAPID_PUBLIC_KEY = "REPLACE_WITH_VAPID_PUBLIC_KEY"
 VAPID_SUBJECT = "mailto:you@example.com"
 # Comma-separated list of sites allowed to call this worker (the app's own URL).
 ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:4173"
+
+# Household sync between two phones (M8). Create with:
+#   npx wrangler d1 create parenthood
+# paste the database_id below, then apply the schema:
+#   npx wrangler d1 execute parenthood --remote --file=schema.sql
+[[d1_databases]]
+binding = "DB"
+database_name = "parenthood"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
