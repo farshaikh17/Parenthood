@@ -30,7 +30,7 @@ export interface ScheduledAlert {
   body: string;
 }
 
-const WORKER_URL: string | undefined = (import.meta as any).env?.VITE_PUSH_WORKER_URL;
+const WORKER_URL: string | undefined = (import.meta as any).env?.VITE_WORKER_URL || (import.meta as any).env?.VITE_PUSH_WORKER_URL;
 const VAPID_PUBLIC_KEY: string | undefined = (import.meta as any).env?.VITE_VAPID_PUBLIC_KEY;
 
 export function isConfigured(): boolean {
