@@ -36,6 +36,10 @@ import {
 } from './simulation/storage';
 import { INITIAL_MILESTONES } from './simulation/initialData';
 import { soundFx } from './utils/audio';
+import { NightAlert } from './components/NightAlert';
+import { predictNightWakes } from './simulation/nightPredictor';
+import { scheduleAlerts, showLocalNightNotification } from './notifications/pushClient';
+import { ensurePersonality } from './simulation/personality';
 
 import { AndroidFrame } from './components/AndroidFrame';
 import { TopAppBar, BottomNavigationBar } from './components/Navigation';
@@ -109,6 +113,9 @@ export default function App() {
   const [activeActionModal, setActiveActionModal] = useState<string | null>(null);
   // Short-lived feedback after an action ("what happened after I did it?")
   const [feedback, setFeedback] = useState<{ text: string; tone: 'good' | 'neutral' | 'bad' } | null>(null);
+  // M7: the baby-monitor overlay (dark screen + crying, needs hidden until you "go to" the baby)
+  const [nightAlert, setNightAlert] = useState<{ atMs: number } | null>(null);
+  const openedFromNightPush = useRef(typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('night') === '1');
   useEffect(() => {
     if (!feedback) return;
     const t = setTimeout(() => setFeedback(null), 7000);
@@ -175,6 +182,13 @@ export default function App() {
         if (result.newEvents.some(e => e.severity === 'urgent' || e.severity === 'warning')) {
           soundFx.playAlert();
         }
+        const nightWake = result.newEvents.find(e => e.type === 'night_waking' || e.type === 'sleep_regression');
+        if (nightWake && settings.nighttimeAlertsEnabled) {
+          setNightAlert({ atMs: Date.now() });
+          if (document.visibilityState === 'hidden') {
+            showLocalNightNotification(`${baby.name} is awake`, 'Open Parenthood to see what they need.');
+          }
+        }
       }
 
       setMilestones(result.updatedMilestones);
@@ -196,7 +210,15 @@ export default function App() {
   // When the tab is hidden and shown again, run the away policy so a long background pause behaves like closing the app
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState !== 'visible' || !baby || !babyState) return;
+      if (!baby || !babyState) return;
+      if (document.visibilityState === 'hidden') {
+        // Before you look away, predict tonight's wakings and hand them to the push server (if configured)
+        if (settings.nighttimeAlertsEnabled && userProfile) {
+          const alerts = predictNightWakes(baby, babyState, parents, settings, Date.now());
+          scheduleAlerts(userProfile.id, alerts);
+        }
+        return;
+      }
       const now = Date.now();
       const result = runAwayCatchup(
         { baby, babyState, parents, userProfile, settings, events, actionRecords, milestones, dayLogs },
@@ -216,6 +238,14 @@ export default function App() {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [baby, babyState, parents, userProfile, settings, events, actionRecords, milestones, dayLogs]);
+
+  // Opened from a night notification: show the monitor screen first if the baby really is awake
+  useEffect(() => {
+    if (!openedFromNightPush.current || !baby || !babyState) return;
+    openedFromNightPush.current = false;
+    try { window.history.replaceState({}, '', window.location.pathname); } catch {}
+    if (!babyState.isSleeping && babyState.comfort < 60) setNightAlert({ atMs: Date.now() });
+  }, [baby, babyState]);
 
   // Calculate score report
   const scoreReport: ScoreReport = babyState && userProfile ? SimulationEngine.calculateScore(
@@ -502,6 +532,7 @@ export default function App() {
             settings={settings}
             onUpdateSettings={(newSettings) => setSettings(prev => ({ ...prev, ...newSettings }))}
             onResetSimulation={handleResetSimulation}
+            userId={userProfile?.id}
           />
         )}
       </main>
@@ -536,6 +567,17 @@ export default function App() {
           unitSystem={settings.unitSystem}
           onClose={() => setActiveActionModal(null)}
           onConfirmAction={handlePerformAction}
+        />
+      )}
+
+      {/* Night alert overlay (M7) */}
+      {nightAlert && baby && babyState && !babyState.isSleeping && (
+        <NightAlert
+          babyName={baby.name}
+          atMs={nightAlert.atMs}
+          cryIntensity={ensurePersonality(baby).cryIntensity}
+          soundEnabled={settings.soundEffectsEnabled}
+          onGoToBaby={() => { setNightAlert(null); setCurrentScreen('dashboard'); }}
         />
       )}
 
