@@ -4,7 +4,8 @@
  */
 
 import React from 'react';
-import { Baby, BabyState, Parent, ScoreReport, UserProfile } from '../types';
+import { Baby, BabyState, CareActionRecord, DayLog, Parent, ScoreReport, SimulationEvent, UserProfile } from '../types';
+import { buildMemorySummary, memoryToSentences } from '../simulation/memory';
 import { 
   HeartHandshake, 
   Brain, 
@@ -29,6 +30,9 @@ interface ParentStatusScreenProps {
   babyState?: BabyState;
   onSwitchActiveParent: (parentId: string) => void;
   onOpenSelfCare: () => void;
+  actionRecords?: CareActionRecord[];
+  events?: SimulationEvent[];
+  dayLogs?: DayLog[];
 }
 
 export const ParentStatusScreen: React.FC<ParentStatusScreenProps> = ({
@@ -38,8 +42,12 @@ export const ParentStatusScreen: React.FC<ParentStatusScreenProps> = ({
   baby,
   babyState,
   onSwitchActiveParent,
-  onOpenSelfCare
+  onOpenSelfCare,
+  actionRecords = [],
+  events = [],
+  dayLogs = []
 }) => {
+  const memorySentences = baby && babyState ? memoryToSentences(baby.name, buildMemorySummary(baby, babyState, parents, actionRecords, events, dayLogs)) : [];
   const activeParent = parents.find(p => p.id === userProfile.activeParentId) || parents[0];
 
   return (
@@ -229,6 +237,19 @@ export const ParentStatusScreen: React.FC<ParentStatusScreenProps> = ({
           </p>
         </div>
       )}
+
+      {/* What the baby has learned — from records only */}
+      <div className="p-4 rounded-2xl bg-stone-800/40 border border-stone-700/60 space-y-2">
+        <span className="text-xs font-bold text-stone-200 block">What {baby ? baby.name : 'the baby'} has learned about you</span>
+        {memorySentences.length === 0 ? (
+          <p className="text-[11px] text-stone-500">Nothing yet — patterns show up after a few days of care.</p>
+        ) : (
+          <ul className="text-[11px] text-stone-300 space-y-1">
+            {memorySentences.map((t, i) => <li key={i}>• {t}</li>)}
+          </ul>
+        )}
+        <p className="text-[10px] text-stone-500">Built only from what actually happened in the simulation.</p>
+      </div>
 
       {/* Self-Care Button */}
       <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-800/40 flex items-center justify-between">

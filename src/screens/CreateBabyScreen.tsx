@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Baby, TemperamentType, UnitSystem } from '../types';
 import { TEMPERAMENTS } from '../simulation/initialData';
 import { inchesToCm, lbsOzToGrams } from '../utils/units';
+import { createPersonality } from '../simulation/personality';
 import { Sparkles, Heart, Scale, Ruler, ArrowRight, ArrowLeft } from 'lucide-react';
 
 interface CreateBabyScreenProps {
@@ -47,7 +48,8 @@ export const CreateBabyScreen: React.FC<CreateBabyScreenProps> = ({ unitSystem, 
       currentWeightGrams: grams,
       currentLengthCm: cm,
       birthTimestamp: Date.now(),
-      developmentalAgeDays: 0
+      developmentalAgeDays: 0,
+      personality: createPersonality(temperament, Math.floor(Math.random() * 2 ** 31))
     };
 
     onComplete(newBaby);

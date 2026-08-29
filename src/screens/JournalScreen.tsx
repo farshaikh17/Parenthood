@@ -4,10 +4,11 @@
  */
 
 import React, { useState } from 'react';
-import { Baby, CareActionRecord, DayLog, JournalEntry, Milestone, Parent, SimulationEvent } from '../types';
+import { Baby, BabyState, CareActionRecord, DayLog, JournalEntry, Milestone, Parent, SimulationEvent } from '../types';
 import { getDayLog, summarizeDay } from '../simulation/dayLog';
 import { MILESTONE_NOTES } from '../content/copy';
 import { formatDevelopmentalAge, getDevelopmentalAgeDays } from '../simulation/clock';
+import { buildMemorySummary, memoryToSentences } from '../simulation/memory';
 import { 
   BookOpen, 
   Sparkles, 
@@ -28,6 +29,7 @@ interface JournalScreenProps {
   recentEvents: SimulationEvent[];
   actionRecords: CareActionRecord[];
   dayLogs: DayLog[];
+  babyState?: BabyState;
   simulatedTimeMs: number;
   onAddJournalEntry: (entry: JournalEntry) => void;
 }
@@ -40,6 +42,7 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
   recentEvents,
   actionRecords,
   dayLogs,
+  babyState,
   simulatedTimeMs,
   onAddJournalEntry
 }) => {
@@ -82,6 +85,7 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
           events: todaysEvents.slice(0, 40),
           actions: todaysActions.slice(0, 60),
           milestonesToday,
+          memory: babyState ? memoryToSentences(baby.name, buildMemorySummary(baby, babyState, parents, actionRecords, recentEvents, dayLogs)) : [],
           parentNote: parentNote.trim() || undefined
         })
       });

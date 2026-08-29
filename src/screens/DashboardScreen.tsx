@@ -38,6 +38,7 @@ import { soundFx } from '../utils/audio';
 import { getDevelopmentalStage, isNighttimeHour } from '../simulation/engine';
 import { formatLength, formatWeight } from '../utils/units';
 import { formatDevelopmentalAge, getCareDayNumber, getDevelopmentalAgeDays } from '../simulation/clock';
+import { describeBaby, preferredCaregiver } from '../simulation/personality';
 
 interface DashboardScreenProps {
   baby: Baby;
@@ -148,6 +149,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   };
 
   const moodInfo = getMoodVisual();
+  const babyDescription = describeBaby(baby, babyState, stage);
+  const preferred = userProfile.householdType === 'two_parent' ? preferredCaregiver(babyState, parents) : null;
 
   return (
     <div className="flex-1 p-4 space-y-4 text-stone-100 overflow-y-auto animate-in fade-in duration-200">
@@ -267,8 +270,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               {moodInfo.label}
             </span>
             <p className="text-[11px] text-stone-400 max-w-xs leading-tight">
-              {moodInfo.desc}
+              {babyDescription}
             </p>
+            {preferred && (
+              <p className="text-[10px] text-teal-400/80 max-w-xs leading-tight">
+                {baby.name} has started settling more easily with {preferred.parent.name}.
+              </p>
+            )}
           </div>
         </div>
 
