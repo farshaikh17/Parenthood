@@ -45,7 +45,7 @@ import { makeId } from './simulation/engine';
 import { EVENT_NOTES } from './content/copy';
 import { AppSavedData } from './simulation/storage';
 
-import { AndroidFrame } from './components/AndroidFrame';
+import { AppShell } from './components/AppShell';
 import { TopAppBar, BottomNavigationBar } from './components/Navigation';
 import { ActionModal } from './components/ActionModal';
 
@@ -449,11 +449,7 @@ export default function App() {
   const isMainScreen = ['dashboard', 'needs_status', 'parent_status', 'event_history', 'journal', 'settings'].includes(currentScreen);
 
   return (
-    <AndroidFrame
-      simulatedTimeMs={settings.simulatedTimeMs}
-      soundEnabled={settings.soundEffectsEnabled}
-      onToggleSound={() => setSettings(prev => ({ ...prev, soundEffectsEnabled: !prev.soundEffectsEnabled }))}
-    >
+    <AppShell>
       {/* Top App Bar for Main Simulation Screens */}
       {isMainScreen && (
         <TopAppBar
@@ -647,6 +643,6 @@ export default function App() {
           {feedback.text}
         </div>
       )}
-    </AndroidFrame>
+    </AppShell>
   );
 }
