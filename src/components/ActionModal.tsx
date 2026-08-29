@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Baby, BabyState, Parent, UnitSystem, UserProfile } from '../types';
 import { feedSliderConfig, formatVolume } from '../utils/units';
+import { SELF_CARE_NOTE } from '../content/copy';
 
 interface ActionModalProps {
   isOpen: boolean;
@@ -380,6 +381,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({
               <p className="text-stone-400">
                 Put {baby.name} down somewhere safe and step away for ten minutes. It helps. It does not make the workload disappear.
               </p>
+              <p className="text-[10px] text-stone-500 mt-2 leading-relaxed">{SELF_CARE_NOTE.body}</p>
             </div>
             <button
               onClick={() => handlePerform()}
