@@ -244,7 +244,8 @@ export interface SimulationEvent {
     | 'evening_fussiness'
     | 'illness_start'
     | 'illness_end'
-    | 'vaccination';
+    | 'vaccination'
+    | 'sync';
   source?: RecordSource;
   /** What the simulation looked like when this happened — the only thing an explanation may refer to. */
   snapshot?: EventSnapshot;

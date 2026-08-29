@@ -40,6 +40,10 @@ import { NightAlert } from './components/NightAlert';
 import { predictNightWakes } from './simulation/nightPredictor';
 import { scheduleAlerts, showLocalNightNotification } from './notifications/pushClient';
 import { ensurePersonality } from './simulation/personality';
+import { useHouseholdSync, RemoteApplyInfo } from './sync/useHouseholdSync';
+import { makeId } from './simulation/engine';
+import { EVENT_NOTES } from './content/copy';
+import { AppSavedData } from './simulation/storage';
 
 import { AndroidFrame } from './components/AndroidFrame';
 import { TopAppBar, BottomNavigationBar } from './components/Navigation';
@@ -116,6 +120,44 @@ export default function App() {
   // M7: the baby-monitor overlay (dark screen + crying, needs hidden until you "go to" the baby)
   const [nightAlert, setNightAlert] = useState<{ atMs: number } | null>(null);
   const openedFromNightPush = useRef(typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('night') === '1');
+
+  // M8: two phones, one baby. The phone that acted last runs the simulation; the other watches.
+  const syncData: AppSavedData = { userProfile, baby, babyState, parents, settings, actionRecords, events, journalEntries, milestones, dayLogs };
+  const applyRemote = (data: AppSavedData, info: RemoteApplyInfo) => {
+    let d = data;
+    if (info.takeOver && d.baby && d.babyState) {
+      // The other phone stopped caring a while ago: cover the gap with the normal away policy
+      const r = runAwayCatchup({ baby: d.baby, babyState: d.babyState, parents: d.parents, userProfile: d.userProfile, settings: d.settings, events: d.events, actionRecords: d.actionRecords, milestones: d.milestones, dayLogs: d.dayLogs }, Date.now());
+      d = { ...d, baby: r.baby, babyState: r.babyState, parents: r.parents, settings: { ...r.settings, lastRealTimestampMs: Date.now() }, events: r.events, actionRecords: r.actionRecords, milestones: r.milestones, dayLogs: r.dayLogs };
+    }
+    const note: SimulationEvent | null = d.baby && (info.takeOver || info.leaderChanged) ? {
+      id: makeId('sync', d.settings.simulatedTimeMs),
+      timestamp: d.settings.simulatedTimeMs,
+      dayNumber: Math.floor(d.baby.developmentalAgeDays),
+      type: 'sync',
+      source: 'system',
+      title: info.takeOver ? 'This phone took over' : `Updated from ${info.fromDeviceName}`,
+      description: info.takeOver
+        ? `${info.fromDeviceName} stopped caring about ${Math.max(1, Math.round(info.gapMs / 60000))} minutes ago, so this phone picked ${d.baby.name} up from the latest shared save.`
+        : `${d.baby.name}'s latest state came from ${info.fromDeviceName}. This phone is watching until you do something.`,
+      educationalNote: EVENT_NOTES.sync.body,
+      severity: 'info',
+      resolved: true,
+      resolvedAt: d.settings.simulatedTimeMs
+    } : null;
+    setUserProfile(d.userProfile);
+    setBaby(d.baby);
+    setBabyState(d.babyState);
+    setParents(d.parents);
+    setSettings({ ...d.settings, lastRealTimestampMs: Date.now() });
+    setActionRecords(d.actionRecords);
+    setEvents(note ? [note, ...d.events] : d.events);
+    setJournalEntries(d.journalEntries);
+    setMilestones(d.milestones);
+    setDayLogs(d.dayLogs);
+    if (d.baby && currentScreen === 'welcome') setCurrentScreen('dashboard');
+  };
+  const sync = useHouseholdSync(syncData, applyRemote);
   useEffect(() => {
     if (!feedback) return;
     const t = setTimeout(() => setFeedback(null), 7000);
@@ -149,6 +191,7 @@ export default function App() {
   // Main Simulation Loop Timer (Runs every 1 second)
   useEffect(() => {
     if (!baby || !babyState || settings.isPaused) return;
+    if (!sync.isLeader) return; // another phone is caring; this one only watches
 
     const interval = setInterval(() => {
       const deltaSimMs = 1000 * settings.timeSpeed;
@@ -195,7 +238,7 @@ export default function App() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [baby, babyState, parents, settings, events, milestones, userProfile]);
+  }, [baby, babyState, parents, settings, events, milestones, userProfile, sync.isLeader]);
 
   // At the end of every care day, write a factual journal entry automatically (no AI, no invention)
   useEffect(() => {
@@ -219,6 +262,7 @@ export default function App() {
         }
         return;
       }
+      if (!sync.isLeader) return; // the caring phone owns the gap; we will pull its save
       const now = Date.now();
       const result = runAwayCatchup(
         { baby, babyState, parents, userProfile, settings, events, actionRecords, milestones, dayLogs },
@@ -237,7 +281,7 @@ export default function App() {
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [baby, babyState, parents, userProfile, settings, events, actionRecords, milestones, dayLogs]);
+  }, [baby, babyState, parents, userProfile, settings, events, actionRecords, milestones, dayLogs, sync.isLeader]);
 
   // Opened from a night notification: show the monitor screen first if the baby really is awake
   useEffect(() => {
@@ -333,6 +377,7 @@ export default function App() {
   // Care Action Handler
   const handlePerformAction = (actionType: string, params?: any) => {
     if (!baby || !babyState) return;
+    sync.claimLeadership(); // acting on this phone makes it the caring phone
 
     const activeParentId = userProfile?.activeParentId || parents[0]?.id || 'parent_primary';
     const result = SimulationEngine.applyAction(
@@ -381,6 +426,7 @@ export default function App() {
 
   // Reset Simulation
   const handleResetSimulation = () => {
+    sync.leave();
     resetAppStorage();
     setUserProfile(null);
     setBaby(null);
@@ -533,10 +579,17 @@ export default function App() {
             onUpdateSettings={(newSettings) => setSettings(prev => ({ ...prev, ...newSettings }))}
             onResetSimulation={handleResetSimulation}
             userId={userProfile?.id}
+            sync={sync}
+            babyName={baby?.name}
           />
         )}
       </main>
 
+      {isMainScreen && sync.code && !sync.isLeader && (
+        <div className="px-4 py-2 text-[11px] text-sky-100 bg-sky-950/80 border-t border-sky-800 text-center">
+          {sync.leaderName || 'Another phone'} is caring for {baby?.name} — you're watching. Do something and this phone takes over.
+        </div>
+      )}
       {isMainScreen && journeyComplete && (
         <div className="px-4 py-2 text-[11px] text-teal-100 bg-teal-950/80 border-t border-teal-800 text-center">
           {baby?.name} has reached six months. The final report arrives in a later update — you can keep caring for now.
