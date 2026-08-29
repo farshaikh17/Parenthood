@@ -88,38 +88,37 @@ Respond in valid JSON: {"reflection": string, "milestoneInsight": string}
   // AI Parenting advice / explanation endpoint
   app.post("/api/gemini/explain-event", async (req, res) => {
     try {
-      const { babyState, recentEvent, question } = req.body;
+      const { event, snapshot, staticNote, question } = req.body || {};
       const ai = getGeminiClient();
 
-      if (!ai) {
-        return res.json({
-          insight: "In the simulation, this happened because of the baby's current state (hunger, tiredness, wind or a wet nappy). Check the Needs screen for the likely cause.",
-          source: "offline_fallback"
-        });
-      }
+      // Deterministic, always-available explanation built only from the snapshot
+      const factual = () => {
+        if (!snapshot) return staticNote || "No detail was recorded for this event.";
+        const reasons: string[] = [];
+        if (snapshot.hunger >= 60) reasons.push(`hunger was high (${snapshot.hunger}/100, last feed ${snapshot.minutesSinceFeed} min earlier)`);
+        if (snapshot.gasDiscomfort >= 40) reasons.push(`there was trapped wind (${snapshot.gasDiscomfort}/100)`);
+        if (snapshot.diaperSoiled >= 50) reasons.push(`the nappy was ${snapshot.diaperType} (${snapshot.minutesSinceDiaper} min since a change)`);
+        if (!snapshot.isSleeping && snapshot.sleepiness >= 65) reasons.push(`they had been awake ${snapshot.awakeMinutes} min and were over-tired (${snapshot.sleepiness}/100)`);
+        if (reasons.length === 0) reasons.push(`no single need stood out — comfort was ${snapshot.comfort}/100 and it was ${snapshot.isNight ? "night" : "daytime"}`);
+        return `In the simulation at that moment: ${reasons.join("; ")}.`;
+      };
 
-      const prompt = `You explain events inside "Parenthood", an educational baby-care SIMULATION.
-Simulation state right now: ${JSON.stringify(babyState || {})}
-Event: ${recentEvent || "Baby was crying"}
-Question: ${question || "Why did this happen?"}
+      if (!ai) return res.json({ insight: factual(), source: "offline_fallback" });
 
-In 2-3 plain sentences, explain what in the simulation state most likely caused this event (e.g. hunger high, awake too long, wind after a feed, wet nappy). Refer only to values present in the state. Do not give medical advice, do not diagnose, do not cite studies or organisations, do not say "evidence-based". You may add ONE cautious sentence that real babies vary. Plain text only.`;
+      const prompt = `You explain events inside "Parenthood", an educational baby-care SIMULATION, to the parent.
+Event: ${JSON.stringify(event || {})}
+Simulation state at that moment (the ONLY facts you may use): ${JSON.stringify(snapshot || {})}
+Simulation note already shown to the user: ${JSON.stringify(staticNote || "")}
+Parent's question: ${question || "Why did this happen?"}
 
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-      });
+Write 2-3 plain sentences saying which values in the state most likely caused the event (hunger, awake time/over-tiredness, wind after a feed, nappy). Quote the numbers you rely on. If nothing stands out, say so honestly. Do not give medical advice, do not diagnose, do not cite studies or organisations, do not say "evidence-based". You may end with one cautious sentence that real babies vary. Plain text only.`;
 
-      res.json({
-        insight: response.text?.trim() || "The simulation could not produce an explanation. Check the Needs screen for the likely cause.",
-        source: "gemini"
-      });
+      const response = await ai.models.generateContent({ model: "gemini-2.5-flash", contents: prompt });
+      const text = response.text?.trim();
+      res.json({ insight: text && text.length > 20 ? text : factual(), source: text ? "gemini" : "offline_fallback" });
     } catch (error: any) {
-      console.error("Pediatric Insight Error:", error);
-      res.json({
-        insight: "The explanation service is unavailable right now. Check the Needs screen for the likely cause.",
-        source: "error_fallback"
-      });
+      console.error("Explain Event Error:", error?.message || error);
+      res.json({ insight: "The explanation service is unavailable right now. Check the Needs screen for the likely cause.", source: "error_fallback" });
     }
   });
 
