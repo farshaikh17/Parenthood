@@ -11,6 +11,7 @@ import {
   CaregiverEffectivenessStats,
   DevelopmentalStage,
   EventSnapshot,
+  HealthCondition,
   DifficultyMode, 
   Milestone, 
   Parent, 
@@ -81,6 +82,36 @@ export const STAGE_TUNING: Record<DevelopmentalStage, {
 };
 
 export const SOLIDS_MIN_AGE_DAYS = 180; // "around 6 months" (WHO)
+
+/**
+ * DIFFICULT PERIODS & MINIMAL HEALTH (simulation heuristics; see content/copy.ts for what is sourced)
+ * - Crying peak: harder between ~2 and ~12 weeks, worst around 6 weeks, evenings worst (NHS soothing guidance).
+ * - Growth spurts: short hungrier spells at a few early ages (cluster feeding).
+ * - Health: only mild, self-limiting episodes with observable cues. No vital signs. Ever.
+ * - Vaccination: a generic early-months appointment; a day of being more unsettled afterwards.
+ */
+export const DIFFICULT_PERIODS = {
+  cryingPeak: { startDay: 14, peakDay: 42, endDay: 84, maxPenaltyMultiplier: 1.25 },
+  eveningHours: { start: 17, end: 22 },
+  growthSpurtAges: [10, 21, 42, 90],
+  growthSpurtDurationDays: 2,
+  growthSpurtHungerMultiplier: 1.35,
+  illness: { minAgeDays: 14, dailyChance: 0.03, maxEpisodes: 2, minDays: 2, maxDays: 4 },
+  vaccinationAges: [56, 84, 112],
+  postVaccineHours: 24
+};
+
+/** 1.0 outside the crying-peak window; rises to maxPenaltyMultiplier around the peak; extra in the evening. */
+export function cryingPeakMultiplier(ageDays: number, hour: number): number {
+  const c = DIFFICULT_PERIODS.cryingPeak;
+  let m = 1.0;
+  if (ageDays >= c.startDay && ageDays <= c.endDay) {
+    const dist = Math.abs(ageDays - c.peakDay) / (c.peakDay - c.startDay);
+    m = 1 + (c.maxPenaltyMultiplier - 1) * Math.max(0, 1 - dist);
+  }
+  if (hour >= DIFFICULT_PERIODS.eveningHours.start && hour < DIFFICULT_PERIODS.eveningHours.end && ageDays >= c.startDay && ageDays <= c.endDay) m += 0.1;
+  return m;
+}
 
 export class SimulationEngine {
   /**
@@ -158,7 +189,9 @@ export class SimulationEngine {
     // 2. Hunger Progression (Milk & Complementary Solids)
     // Milk hunger progression: stage × temperament × difficulty, slower during night sleep
     const nightSleepFactor = (isNighttime && nextState.isSleeping) ? tune.nightHungerFactor : 1;
-    const hungerRatePerMinute = (100 / (tune.hungerFullToStarvingMinutes * tempConfig.hungerToleranceMultiplier)) * diffMultiplier * nightSleepFactor;
+    const inGrowthSpurt = (nextState.growthSpurtUntil || 0) > simTime;
+    const spurtFactor = inGrowthSpurt ? DIFFICULT_PERIODS.growthSpurtHungerMultiplier * (settings.difficulty === 'hardcore' ? 1.15 : 1) : 1;
+    const hungerRatePerMinute = (100 / (tune.hungerFullToStarvingMinutes * tempConfig.hungerToleranceMultiplier)) * diffMultiplier * nightSleepFactor * spurtFactor;
     nextState.hunger = Math.min(100, Math.max(0, nextState.hunger + (hungerRatePerMinute * deltaMinutes)));
 
     // Interest in solids only around 6 months (WHO), alongside milk
@@ -179,7 +212,8 @@ export class SimulationEngine {
       const sleepRecoveryRate = 100 / (tune.sleepCycleMinutes * 2);
       nextState.sleepiness = Math.max(0, nextState.sleepiness - (sleepRecoveryRate * deltaMinutes));
 
-      const cycleMinutes = tune.sleepCycleMinutes * (tempConfig.sleepCycleDurationMinutes / 50); // temperament scales cycle length
+      const snifflyNow = nextState.healthState === 'sniffles' && (nextState.healthUntil || 0) > simTime;
+      const cycleMinutes = tune.sleepCycleMinutes * (tempConfig.sleepCycleDurationMinutes / 50) * (snifflyNow ? 0.75 : 1); // temperament scales cycle length; a blocked nose fragments sleep
       const hungerWakeThreshold = isNighttime ? tune.hungerWakeNight : tune.hungerWakeDay;
       const diaperWakeThreshold = isNighttime ? 75 : 70;
       const gasWakeThreshold = isNighttime ? 65 : 60;
@@ -304,8 +338,11 @@ export class SimulationEngine {
     // 5. Gas Discomfort & Colic
     const minutesSinceFeeding = (simTime - nextState.lastFedTimestamp) / (60 * 1000);
     const minutesSinceBurp = (simTime - nextState.lastBurpedTimestamp) / (60 * 1000);
+    const tummy = nextState.healthState === 'unsettled_tummy' && (nextState.healthUntil || 0) > simTime;
     if (minutesSinceFeeding < 60 && minutesSinceBurp > 45) {
-      nextState.gasDiscomfort = Math.min(100, nextState.gasDiscomfort + (0.35 * deltaMinutes));
+      nextState.gasDiscomfort = Math.min(100, nextState.gasDiscomfort + ((tummy ? 0.6 : 0.35) * deltaMinutes));
+    } else if (tummy && Math.random() < 0.02 * deltaMinutes) {
+      nextState.gasDiscomfort = Math.min(100, nextState.gasDiscomfort + 8);
     } else {
       nextState.gasDiscomfort = Math.max(0, nextState.gasDiscomfort - (0.15 * deltaMinutes));
     }
@@ -318,7 +355,11 @@ export class SimulationEngine {
     const gasPenalty = Math.max(0, (nextState.gasDiscomfort - 20) * 0.8);
     const overtiredPenalty = nextState.sleepiness > 70 && !nextState.isSleeping ? (nextState.sleepiness - 70) * 1.8 : 0;
     
-    const totalDistress = hungerPenalty + solidFoodPenalty + diaperPenalty + gasPenalty + overtiredPenalty;
+    const sniffly = nextState.healthState === 'sniffles' && (nextState.healthUntil || 0) > simTime;
+    const postVaccine = (nextState.postVaccineUntil || 0) > simTime;
+    const peak = cryingPeakMultiplier(ageDays, currentHour);
+    const episodePenalty = (sniffly ? 8 : 0) + (postVaccine ? 8 : 0);
+    const totalDistress = (hungerPenalty + solidFoodPenalty + diaperPenalty + gasPenalty + overtiredPenalty) * peak + episodePenalty;
     nextState.comfort = Math.max(0, Math.min(100, 100 - totalDistress));
 
     // 7. Mood is derived from comfort (and, when content, from tiredness/hunger). Never randomised.
@@ -396,6 +437,81 @@ export class SimulationEngine {
         sleepDebtHours: parseFloat(Math.min(24, Math.max(0, p.sleepDebtHours + sleepDebtDelta)).toFixed(1))
       };
     });
+
+    // 8b. Difficult periods & minimal health (bounded, state-aware, honest)
+    const careDay = Math.max(0, Math.floor((simTime - baby.birthTimestamp) / 86400000));
+    const chanceScale = deltaMinutes / (24 * 60); // per-day probabilities applied per tick
+
+    // Growth spurts at a few early ages (once each)
+    const spurtAge = DIFFICULT_PERIODS.growthSpurtAges.find(a => ageDays >= a && ageDays < a + 1 && (nextState.lastGrowthSpurtAgeDays ?? -1) < a);
+    if (spurtAge !== undefined) {
+      nextState.lastGrowthSpurtAgeDays = spurtAge;
+      nextState.growthSpurtUntil = simTime + DIFFICULT_PERIODS.growthSpurtDurationDays * 86400000;
+      newEvents.push({
+        id: makeId('spurt', simTime), timestamp: simTime, dayNumber: ageDays, type: 'growth_spurt', source: 'system',
+        snapshot: snapshotOf(nextState, simTime, isNighttime, ageDays),
+        title: 'A hungrier couple of days', description: `${baby.name} seems to want feeding all the time. This usually passes in a day or two.`,
+        educationalNote: EVENT_NOTES.growth_spurt.body, severity: 'info', resolved: true, resolvedAt: simTime
+      });
+    }
+
+    // Evening fussiness during the crying-peak window (at most once per care day, only when awake and not content)
+    const inPeak = ageDays >= DIFFICULT_PERIODS.cryingPeak.startDay && ageDays <= DIFFICULT_PERIODS.cryingPeak.endDay;
+    const isEvening = currentHour >= DIFFICULT_PERIODS.eveningHours.start && currentHour < DIFFICULT_PERIODS.eveningHours.end;
+    if (inPeak && isEvening && !nextState.isSleeping && nextState.comfort < 60 && (nextState.lastEveningFussDay ?? -1) !== careDay && Math.random() < 0.06 * deltaMinutes) {
+      nextState.lastEveningFussDay = careDay;
+      nextState.comfort = Math.max(0, nextState.comfort - 15);
+      newEvents.push({
+        id: makeId('evening', simTime), timestamp: simTime, dayNumber: ageDays, type: 'evening_fussiness', source: 'system',
+        snapshot: snapshotOf(nextState, simTime, isNighttime, ageDays),
+        title: 'The evening stretch', description: `${baby.name} is hard to settle this evening and nothing seems to work for long.`,
+        educationalNote: EVENT_NOTES.evening_fussiness.body, severity: 'warning', resolved: false
+      });
+    }
+
+    // Mild illness episodes: rare, bounded, self-limiting
+    const ill = DIFFICULT_PERIODS.illness;
+    if (nextState.healthState !== 'healthy' && (nextState.healthUntil || 0) <= simTime) {
+      const was = nextState.healthState;
+      nextState.healthState = 'healthy';
+      nextState.healthUntil = undefined;
+      newEvents.push({
+        id: makeId('well', simTime), timestamp: simTime, dayNumber: ageDays, type: 'illness_end', source: 'system',
+        title: was === 'sniffles' ? 'Nose is clear again' : 'Tummy settled', description: `${baby.name} seems back to normal.`,
+        educationalNote: EVENT_NOTES.illness_end.body, severity: 'info', resolved: true, resolvedAt: simTime
+      });
+    } else if (nextState.healthState === 'healthy' && ageDays >= ill.minAgeDays && (nextState.illnessEpisodes || 0) < ill.maxEpisodes) {
+      const chance = ill.dailyChance * (settings.difficulty === 'hardcore' ? 1.8 : 1) * chanceScale;
+      if (Math.random() < chance) {
+        const kind: HealthCondition = Math.random() < 0.6 ? 'sniffles' : 'unsettled_tummy';
+        const days = ill.minDays + Math.random() * (ill.maxDays - ill.minDays);
+        nextState.healthState = kind;
+        nextState.healthUntil = simTime + days * 86400000;
+        nextState.illnessEpisodes = (nextState.illnessEpisodes || 0) + 1;
+        newEvents.push({
+          id: makeId('ill', simTime), timestamp: simTime, dayNumber: ageDays, type: 'illness_start', source: 'system',
+          snapshot: snapshotOf(nextState, simTime, isNighttime, ageDays),
+          title: kind === 'sniffles' ? 'A snuffly nose' : 'An unsettled tummy',
+          description: kind === 'sniffles'
+            ? `${baby.name} is snuffly and blocked up — feeds are short and broken, and sleep is lighter. This should pass in a few days.`
+            : `${baby.name} is windy and uncomfortable today, pulling their legs up and grizzling after feeds.`,
+          educationalNote: EVENT_NOTES.illness_start.body, severity: 'warning', resolved: false
+        });
+      }
+    }
+
+    // Routine vaccination appointments at a few early ages (generic, no schedule claims)
+    const vacAge = DIFFICULT_PERIODS.vaccinationAges.find(a => ageDays >= a && ageDays < a + 1 && (nextState.lastVaccinationAgeDays ?? -1) < a);
+    if (vacAge !== undefined && !isNighttime) {
+      nextState.lastVaccinationAgeDays = vacAge;
+      nextState.postVaccineUntil = simTime + DIFFICULT_PERIODS.postVaccineHours * 3600000;
+      newEvents.push({
+        id: makeId('vac', simTime), timestamp: simTime, dayNumber: ageDays, type: 'vaccination', source: 'system',
+        snapshot: snapshotOf(nextState, simTime, isNighttime, ageDays),
+        title: 'Routine vaccination appointment', description: `${baby.name} had a routine vaccination today and may be more unsettled than usual for a day.`,
+        educationalNote: EVENT_NOTES.vaccination.body, severity: 'info', resolved: true, resolvedAt: simTime
+      });
+    }
 
     // 9. Developmental Milestones Check (Reusing existing unlock mechanism)
     for (let i = 0; i < updatedMilestones.length; i++) {
@@ -503,7 +619,8 @@ export class SimulationEngine {
       case 'feed': {
         // Canonical volume is millilitres. ~30 ml reduces hunger by ~25 points.
         const feedAmountMl: number = actionParams.amountMl || (baby.currentWeightGrams > 4500 ? 120 : 75);
-        const reduction = Math.min(nextState.hunger, (feedAmountMl / 30) * 25);
+        const snifflyFeed = nextState.healthState === 'sniffles' && (nextState.healthUntil || 0) > simTime;
+        const reduction = Math.min(nextState.hunger, (feedAmountMl / 30) * 25 * (snifflyFeed ? 0.7 : 1));
         nextState.hunger = Math.max(0, nextState.hunger - reduction);
         nextState.lastFedTimestamp = simTime;
         // Feeding introduces air/gas
@@ -511,7 +628,7 @@ export class SimulationEngine {
         nextState.comfort = Math.min(100, nextState.comfort + 20);
         
         effectiveness = reduction > 30 ? 'excellent' : 'moderate';
-        feedback = `${baby.name} took ${formatVolume(feedAmountMl, settings.unitSystem || 'imperial')}.${reduction >= 30 ? ' Hunger eased.' : ' Still seems hungry.'} A burp may be needed.`;
+        feedback = `${baby.name} took ${formatVolume(feedAmountMl, settings.unitSystem || 'imperial')}.${snifflyFeed ? ' Kept breaking off to breathe through the blocked nose.' : ''}${reduction >= 30 ? ' Hunger eased.' : ' Still seems hungry.'} A burp may be needed.`;
         
         deltaSummary.hunger = -reduction;
         deltaSummary.gas = +25;
@@ -660,6 +777,8 @@ export class SimulationEngine {
           if (nextState.gasDiscomfort > 45) cues.push('pulling legs up and squirming');
           if (nextState.sleepiness > 70) cues.push('rubbing eyes, yawning, staring blankly');
           if (nextState.diaperSoiled > 50) cues.push(`nappy feels ${nextState.diaperType === 'dirty' || nextState.diaperType === 'both' ? 'dirty' : 'wet'}`);
+          if (nextState.healthState === 'sniffles' && (nextState.healthUntil || 0) > simTime) cues.push('snuffly, breathing through the mouth, a bit of a runny nose');
+          if (nextState.healthState === 'unsettled_tummy' && (nextState.healthUntil || 0) > simTime) cues.push('tummy feels tight, lots of wriggling');
           if (cues.length === 0) cues.push('calm and alert, looking around');
         }
         feedback = `${describeBaby(baby, nextState, stage)} You watch ${baby.name} for a moment: ${cues.join('; ')}.`;

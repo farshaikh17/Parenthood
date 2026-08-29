@@ -181,7 +181,7 @@ export function runAwayCatchup(input: AwayCatchupInput, nowRealMs: number): Away
 
     // Autopilot resolves the crying/night events it responded to
     events = events.map(e =>
-      !e.resolved && (e.type === 'crying_spell' || e.type === 'night_waking' || e.type === 'sleep_regression' || e.type === 'hunger_cue')
+      !e.resolved && (e.type === 'crying_spell' || e.type === 'night_waking' || e.type === 'sleep_regression' || e.type === 'hunger_cue' || e.type === 'evening_fussiness' || e.type === 'illness_start')
         ? { ...e, resolved: true, resolvedAt: settings.simulatedTimeMs }
         : e
     );

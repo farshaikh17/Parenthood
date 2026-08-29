@@ -115,7 +115,8 @@ function migrateBabyState(raw: any): BabyState | null {
   if (!raw) return null;
   const { temperatureFahrenheit, ...rest } = raw;
   void temperatureFahrenheit;
-  return { ...rest, healthState: 'healthy' } as BabyState;
+  const valid = ['healthy', 'sniffles', 'unsettled_tummy'];
+  return { ...rest, healthState: valid.includes(rest.healthState) ? rest.healthState : 'healthy' } as BabyState;
 }
 
 function migrateRecords<T extends { source?: any }>(list: any[]): T[] {
