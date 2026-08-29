@@ -17,7 +17,7 @@ export function buildMemorySummary(
 ): BabyMemorySummary {
   // How long crying spells lasted before the user acted (resolved by a user action, not autopilot)
   const durations = events
-    .filter(e => e.type === 'crying_spell' && e.resolved && e.resolvedAt && e.source !== 'autopilot')
+    .filter(e => e.type === 'crying_spell' && e.resolved && e.resolvedAt && e.resolvedBy !== 'autopilot')
     .map(e => Math.max(0, Math.round((e.resolvedAt! - e.timestamp) / 60000)))
     .filter(d => d <= 240);
   const recent = dayLogs.slice(-3);

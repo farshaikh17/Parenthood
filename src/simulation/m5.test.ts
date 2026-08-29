@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { SimulationEngine, cryingPeakMultiplier, DIFFICULT_PERIODS } from './engine';
 import { INITIAL_MILESTONES } from './initialData';
 import { createMockBaby, createMockState, createMockParents, createMockSettings } from './testUtils';
+import { autoJournalEntry, buildJourneyReport, buildWeekSummaries } from './report';
 
 const noon = new Date(2026, 0, 15, 12, 0, 0).getTime();
 
@@ -64,5 +65,31 @@ describe('M5 — honest minimal health', () => {
       if (r.newEvents.some(e => e.type === 'illness_start')) anyStart = true;
     }
     expect(anyStart).toBe(false);
+  });
+});
+
+describe('M6 — journal and report are built from records only', () => {
+  it('auto journal entry states counts from the day log and nothing else', () => {
+    const log = { dayNumber: 2, feeds: 9, diaperChanges: 6, sleepMinutes: 800, cryingMinutes: 40, nightWakings: 2, autopilotActions: 3, userActions: 12, parentStressSum: 300, parentStressSamples: 10 };
+    const e = autoJournalEntry(createMockBaby(), 2, log, noon, INITIAL_MILESTONES, []);
+    expect(e.reflection).toMatch(/Day 3: 9 feeds, 6 nappy changes, about 13.3 hours of sleep and 40 minutes of crying/);
+    expect(e.reflection).toMatch(/2 night wakings/);
+    expect(e.reflection).toMatch(/3 care actions happened while you were away/);
+    expect(e.stats.derivedFromLog).toBe(true);
+  });
+  it('journey report: no data → no claims', () => {
+    const r = buildJourneyReport(createMockBaby(), createMockState(), createMockParents(), null, [], [], [], INITIAL_MILESTONES);
+    expect(r.strengths).toEqual([]);
+    expect(r.challenges).toEqual([]);
+    expect(r.weeks).toEqual([]);
+    expect(r.totals.feeds).toBe(0);
+  });
+  it('week summaries group day logs by care week', () => {
+    const logs = [0, 1, 2, 7, 8].map(d => ({ dayNumber: d, feeds: 8, diaperChanges: 6, sleepMinutes: 840, cryingMinutes: 30, nightWakings: 2, autopilotActions: 0, userActions: 10, parentStressSum: 200, parentStressSamples: 10 }));
+    const w = buildWeekSummaries(logs, [], INITIAL_MILESTONES, createMockBaby());
+    expect(w.length).toBe(2);
+    expect(w[0].days).toBe(3);
+    expect(w[1].days).toBe(2);
+    expect(w[0].sleepHoursPerDay).toBe(14);
   });
 });
