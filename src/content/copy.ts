@@ -269,6 +269,17 @@ export const EVENT_NOTES: Record<string, ContentItem> = {
       'attentive parent, and stops before you return so the baby still needs you.',
     status: 'heuristic',
     sources: []
+  },
+  sync: {
+    id: 'sync',
+    title: 'Shared between phones',
+    summary: 'The baby lives on whichever phone acted last.',
+    body:
+      'With a household code, both phones see the same baby. The phone that last cared for the baby runs the simulation; ' +
+      'the other one watches and updates every few seconds. When you act on the other phone, it takes over. Whatever was ' +
+      'saved most recently wins, and a note like this one is always left so nothing changes silently.',
+    status: 'heuristic',
+    sources: []
   }
 };
 
