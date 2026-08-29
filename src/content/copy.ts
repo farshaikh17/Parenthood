@@ -44,7 +44,25 @@ export const SOURCES = {
   nhsFirstDays: { label: 'NHS — Breastfeeding: the first few days (feeds "at least 8 to 12 times, or more, every 24 hours" in the first weeks)', url: 'https://www.nhs.uk/baby/breastfeeding-and-bottle-feeding/breastfeeding/the-first-few-days/' },
   nhsSleepPatterns: { label: 'NHS — Your baby\'s sleep patterns (newborns ~8–18 h/day in short bursts; some 3–6-month-olds sleep 8 h+ at night)', url: 'https://www.nhs.uk/best-start-in-life/baby/baby-basics/newborn-and-baby-sleeping-advice-for-parents/your-babys-sleep-patterns/' },
   whoFeeding: { label: 'WHO — Infant and young child feeding (exclusive breastfeeding for 6 months; complementary foods from about 6 months; responsive feeding day and night)', url: 'https://www.who.int/news-room/fact-sheets/detail/infant-and-young-child-feeding' },
-  whoGrowth: { label: 'WHO — Child growth standards: weight-for-age', url: 'https://www.who.int/tools/child-growth-standards/standards/weight-for-age' }
+  whoGrowth: { label: 'WHO — Child growth standards: weight-for-age', url: 'https://www.who.int/tools/child-growth-standards/standards/weight-for-age' },
+  nhsSoothing: { label: 'NHS — Soothing a crying baby (common reasons: hunger, wet/dirty nappy, tiredness, wanting a cuddle, wind, too hot/cold, boredom, overstimulation; crying tends to increase from ~2 weeks and reduce around 3 months; afternoons/evenings common)', url: 'https://www.nhs.uk/baby/caring-for-a-newborn/soothing-a-crying-baby/' },
+  nhsSafeSleep: { label: 'NHS — Reduce the risk of sudden infant death syndrome (back to sleep, own cot in your room, clear cot, firm flat mattress, room 16–20 °C, move baby onto their back if they roll until they can roll both ways)', url: 'https://www.nhs.uk/baby/caring-for-a-newborn/reduce-the-risk-of-sudden-infant-death-syndrome/' },
+  cdc2mo: { label: 'CDC — Milestones by 2 months (smiles when you talk to or smile at them; makes sounds other than crying; holds head up when on tummy)', url: 'https://www.cdc.gov/ncbddd/actearly/milestones/milestones-2mo.html' },
+  cdc4mo: { label: 'CDC — Milestones by 4 months (cooing "oooo/aahh"; brings hands to mouth; pushes up onto forearms on tummy)', url: 'https://www.cdc.gov/ncbddd/actearly/milestones/milestones-4mo.html' },
+  cdc6mo: { label: 'CDC — Milestones by 6 months (rolls from tummy to back; laughs; takes turns making sounds)', url: 'https://www.cdc.gov/ncbddd/actearly/milestones/milestones-6mo.html' }
+};
+
+/** Educational note for the parent self-care action. */
+export const SELF_CARE_NOTE: ContentItem = {
+  id: 'self_care',
+  title: 'When you have had enough',
+  summary: 'Feeling you cannot take any more happens to a lot of parents.',
+  body:
+    'Guidance for real parents: put the baby down somewhere safe (their cot or pram), close the door, go into another room and ' +
+    'take a few minutes to calm down. It is not shameful to ask for help. In the simulation, a break lowers your stress a little ' +
+    'and the baby waits safely.',
+  status: 'reviewed',
+  sources: [SOURCES.nhsSoothing]
 };
 
 export const TIME_MODEL_EXPLAINER =
@@ -57,11 +75,12 @@ export const EDUCATIONAL_TOPICS: ContentItem[] = [
     title: 'The first weeks are a big adjustment',
     summary: 'Newborns are adapting to life outside the womb, and so are you.',
     body:
-      'In the earliest weeks many babies settle best with closeness, gentle motion and quiet. Responding to a newborn when they ' +
-      'cry is generally considered part of normal care, not "spoiling". In this simulation, comfort recovers fastest when needs ' +
-      'are met promptly.',
-    status: 'general',
-    sources: []
+      'Guidance lists the usual reasons a baby cries — hunger, a wet or dirty nappy, tiredness, wanting a cuddle, wind, being too ' +
+      'hot or cold, boredom, overstimulation — and suggests holding the baby close, moving gently, swaying, talking or singing, ' +
+      'or stroking their back. Crying tends to increase from around two weeks and ease around three months, often worst in the ' +
+      'afternoon and evening. In this simulation, comfort recovers fastest when needs are met promptly.',
+    status: 'reviewed',
+    sources: [SOURCES.nhsSoothing]
   },
   {
     id: 'wake_windows',
@@ -92,10 +111,11 @@ export const EDUCATIONAL_TOPICS: ContentItem[] = [
     title: 'Sudden movements and startles',
     summary: 'Newborns often startle at sudden sounds or the feeling of falling.',
     body:
-      'A startle can wake a sleeping baby. The simulation models this only loosely (as part of light-sleep waking). Safe-sleep ' +
-      'practices for real babies should come from a qualified source, not from this app.',
-    status: 'general',
-    sources: []
+      'A startle can wake a sleeping baby. The simulation models this only loosely (as part of light-sleep waking). For real ' +
+      'babies, safer-sleep guidance is: on their back, in their own cot in your room, a clear cot with a firm flat mattress, and ' +
+      'not too hot. This app is not the place to learn it.',
+    status: 'reviewed',
+    sources: [SOURCES.nhsSafeSleep]
   },
   {
     id: 'parental_fatigue',
@@ -116,11 +136,12 @@ export const EVENT_NOTES: Record<string, ContentItem> = {
     title: 'Why is the baby crying?',
     summary: 'Crying is the main way a young baby signals a need.',
     body:
-      'In the simulation, sustained crying starts when comfort drops low for several minutes. The usual causes here are hunger, ' +
-      'a wet or dirty nappy, trapped wind after a feed, or being awake too long. The app deliberately does not always tell you ' +
-      'which one — working it out is part of the experience.',
-    status: 'heuristic',
-    sources: []
+      'In the simulation, sustained crying starts when comfort drops low for several minutes. The usual causes here — hunger, ' +
+      'a wet or dirty nappy, trapped wind after a feed, or being awake too long — match the common reasons listed in general ' +
+      'guidance (which also mentions wanting a cuddle, temperature, boredom and overstimulation). The app deliberately does not ' +
+      'always tell you which one — working it out is part of the experience.',
+    status: 'reviewed',
+    sources: [SOURCES.nhsSoothing]
   },
   night_waking: {
     id: 'night_waking',
@@ -156,20 +177,22 @@ export const EVENT_NOTES: Record<string, ContentItem> = {
     title: 'Rolling over',
     summary: 'A movement milestone that changes sleep-safety considerations.',
     body:
-      'Once a real baby can roll, sleep-safety guidance (for example about swaddling) changes. Ask a qualified source; the ' +
-      'simulation only records the milestone.',
-    status: 'general',
-    sources: []
+      'Rolling from tummy to back is listed among things most babies do by around six months. Once a real baby starts rolling, ' +
+      'safer-sleep guidance says to move them onto their back until they can roll both ways by themselves. The simulation only ' +
+      'records the milestone.',
+    status: 'reviewed',
+    sources: [SOURCES.cdc6mo, SOURCES.nhsSafeSleep]
   },
   developmental_milestone: {
     id: 'developmental_milestone',
     title: 'A milestone',
     summary: 'Milestones in the app unlock by simulated age and current state.',
     body:
-      'Real developmental timing varies widely from baby to baby. The ages used here are simulation settings and will be ' +
-      'aligned with reviewed developmental ranges in a later update.',
-    status: 'heuristic',
-    sources: []
+      'Real developmental timing varies widely from baby to baby. The ages used in the simulation sit inside the "most babies ' +
+      'by this age" windows published for 2, 4 and 6 months, but a real baby reaching something earlier or later is not a ' +
+      'verdict on anything.',
+    status: 'reviewed',
+    sources: [SOURCES.cdc2mo, SOURCES.cdc4mo, SOURCES.cdc6mo]
   },
   away_summary: {
     id: 'away_summary',
@@ -185,15 +208,15 @@ export const EVENT_NOTES: Record<string, ContentItem> = {
 };
 
 export const MILESTONE_NOTES: Record<string, string> = {
-  focus_faces: 'Newborns tend to look longest at faces held close. Timing varies; the app uses an early simulated age.',
-  first_social_smile: 'A smile in response to you, rather than a reflex. Often appears in the first couple of months.',
-  tummy_head_lift: 'Brief head lifts during supervised tummy time build neck and shoulder strength.',
-  cooing_sounds: 'Vowel-like sounds are an early step toward speech. Responding to them encourages more.',
-  hands_to_mouth: 'Finding their own hands is an early self-soothing skill.',
-  longer_night_stretch: 'Longer sleep stretches tend to come gradually as babies grow. Every baby is different.',
+  focus_faces: '"Looks at your face" is among the things most babies do by two months. The app unlocks it early; timing varies.',
+  first_social_smile: '"Smiles when you talk to or smile at them" is listed for most babies by two months. In the app it appears around six weeks.',
+  tummy_head_lift: '"Holds head up when on tummy" is listed for most babies by two months. Short, supervised tummy time while awake.',
+  cooing_sounds: 'Cooing sounds like "oooo" and "aahh" are listed for most babies by four months. Answering them encourages more.',
+  hands_to_mouth: '"Brings hands to mouth" is listed for most babies by four months. An early self-soothing skill.',
+  longer_night_stretch: 'Longer sleep stretches tend to come gradually; some babies sleep eight hours or longer at night by three to six months, many do not.',
   entering_social_infant: 'The simulated baby now stays awake longer and interacts more.',
   entering_infant_4_6mo: 'The simulated baby is stronger, more curious and starting to move.',
-  rolls_over: 'Rolling changes what is safe at sleep time. Seek proper guidance for a real baby.',
-  first_solid_food: 'The app lets you offer first tastes of solids at around six months, in line with general guidance. When to start with a real baby is a question for a health professional.',
-  sleep_regression_4mo: 'A temporary period of more night waking modelled in the 4–6 month stage.'
+  rolls_over: '"Rolls from tummy to back" is listed for most babies by six months. Once rolling starts, safer-sleep guidance changes — move them onto their back until they can roll both ways.',
+  first_solid_food: 'Complementary foods are recommended from about six months, alongside milk. When to start with a real baby is a question for a health professional.',
+  sleep_regression_4mo: 'A temporary period of more night waking modelled in the 4–6 month stage. Real babies vary.'
 };
