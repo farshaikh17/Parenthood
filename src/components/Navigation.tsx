@@ -54,7 +54,8 @@ export const TopAppBar: React.FC<{
         </div>
       </div>
 
-      {/* Simulation Speed Pill Controls */}
+      {/* Testing controls — developer mode only */}
+      {settings.developerMode && (
       <div className="flex items-center space-x-1.5 bg-stone-950 p-1 rounded-full border border-stone-800">
         <button
           onClick={() => onUpdateSettings({ isPaused: !settings.isPaused })}
@@ -84,6 +85,7 @@ export const TopAppBar: React.FC<{
           ))}
         </div>
       </div>
+      )}
     </header>
   );
 };
