@@ -4,6 +4,7 @@
  */
 
 import { SimulationEvent } from '../types';
+import { API_BASE } from './apiBase';
 
 /**
  * TYPED AI SERVICE BOUNDARY
@@ -20,7 +21,7 @@ export interface ExplainResult {
 
 export async function explainEvent(event: SimulationEvent, question?: string): Promise<ExplainResult> {
   try {
-    const res = await fetch('/api/gemini/explain-event', {
+    const res = await fetch(`${API_BASE}/api/gemini/explain-event`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
