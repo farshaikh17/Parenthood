@@ -313,7 +313,7 @@ export default function App() {
     // Resolve active crying events if comforted or fed
     if (actionType === 'feed' || actionType === 'cuddle' || actionType === 'rock' || actionType === 'change_diaper' || actionType === 'burp' || actionType === 'put_to_sleep') {
       setEvents(prev => prev.map(e => {
-        if (!e.resolved && (e.type === 'crying_spell' || e.type === 'hunger_cue' || e.type === 'diaper_blowout')) {
+        if (!e.resolved && (e.type === 'crying_spell' || e.type === 'hunger_cue' || e.type === 'diaper_blowout' || e.type === 'evening_fussiness' || e.type === 'night_waking' || e.type === 'sleep_regression')) {
           return { ...e, resolved: true, resolvedAt: settings.simulatedTimeMs };
         }
         return e;

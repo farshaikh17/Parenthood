@@ -29,11 +29,11 @@ export type BabyMood =
   | 'inconsolable';
 
 /**
- * Health is intentionally minimal in V1. Only 'healthy' is ever produced by the engine.
- * A genuine, evidence-informed health model is planned for M5; until then the UI must not
- * display invented vital signs.
+ * Health is deliberately minimal and honest: only mild, common, self-limiting episodes are
+ * modelled, described by what a parent could observe (never vital signs or diagnoses).
+ * 'sniffles' = a blocked nose making feeds and sleep harder; 'unsettled_tummy' = a windy, uncomfortable day.
  */
-export type HealthCondition = 'healthy';
+export type HealthCondition = 'healthy' | 'sniffles' | 'unsettled_tummy';
 
 export type ActionCategory = 
   | 'feed' 
@@ -145,6 +145,15 @@ export interface BabyState {
 
   // Caregiver memory / effectiveness (keyed by parentId)
   caregiverEffectiveness?: Record<string, CaregiverEffectivenessStats>;
+
+  // Difficult periods & health (all bounded, all sim-time stamps)
+  healthUntil?: number;          // when the current mild episode ends
+  illnessEpisodes?: number;      // how many episodes so far (capped)
+  growthSpurtUntil?: number;     // hunger runs higher until this time
+  lastGrowthSpurtAgeDays?: number;
+  postVaccineUntil?: number;     // a little more unsettled until this time
+  lastVaccinationAgeDays?: number;
+  lastEveningFussDay?: number;   // care-day number of the last evening-fussiness event
   
   // Time trackers
   lastFedTimestamp: number;
@@ -230,7 +239,12 @@ export interface SimulationEvent {
     | 'rolls_over'
     | 'sleep_regression'
     | 'solid_food_interest'
-    | 'away_summary';
+    | 'away_summary'
+    | 'growth_spurt'
+    | 'evening_fussiness'
+    | 'illness_start'
+    | 'illness_end'
+    | 'vaccination';
   source?: RecordSource;
   /** What the simulation looked like when this happened — the only thing an explanation may refer to. */
   snapshot?: EventSnapshot;
