@@ -159,3 +159,16 @@ describe('M2 — long absences keep the journey on schedule', () => {
     expect(r.events[0].description).toMatch(/About 3 days/);
   });
 });
+
+describe('M3 — events carry a state snapshot for grounded explanations', () => {
+  it('a crying spell records what the simulation looked like', () => {
+    const state = createMockState({ hunger: 85, comfort: 15, cryingMinutesContinuous: 6, isSleeping: false });
+    const r = SimulationEngine.tick(createMockBaby({ developmentalAgeDays: 3 }), state, createMockParents(), 'parent_1', createMockSettings(), 60 * 1000, [], INITIAL_MILESTONES);
+    const cry = r.newEvents.find(e => e.type === 'crying_spell');
+    expect(cry).toBeDefined();
+    expect(cry!.snapshot).toBeDefined();
+    expect(cry!.snapshot!.hunger).toBeGreaterThanOrEqual(85);
+    expect(cry!.snapshot!.developmentalAgeDays).toBe(3);
+    expect(cry!.description).not.toMatch(/Primary needs/); // the cause is not announced
+  });
+});

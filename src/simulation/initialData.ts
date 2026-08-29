@@ -59,7 +59,7 @@ export const INITIAL_MILESTONES: Milestone[] = [
     id: 'focus_faces',
     title: 'Focusing on faces',
     category: 'cognitive',
-    minAgeDays: 3,
+    minAgeDays: 5,
     description: 'Looks at your face when held close.',
     educationalInsight: MILESTONE_NOTES['focus_faces'] || '',
     unlocked: false
@@ -68,7 +68,7 @@ export const INITIAL_MILESTONES: Milestone[] = [
     id: 'first_social_smile',
     title: 'First social smile',
     category: 'social',
-    minAgeDays: 28,
+    minAgeDays: 42,
     description: 'A smile back at you, not just a reflex.',
     educationalInsight: MILESTONE_NOTES['first_social_smile'] || '',
     unlocked: false
@@ -77,7 +77,7 @@ export const INITIAL_MILESTONES: Milestone[] = [
     id: 'tummy_head_lift',
     title: 'Lifts head during tummy time',
     category: 'motor',
-    minAgeDays: 14,
+    minAgeDays: 30,
     description: 'Briefly lifts their head while on their front.',
     educationalInsight: MILESTONE_NOTES['tummy_head_lift'] || '',
     unlocked: false
@@ -86,7 +86,7 @@ export const INITIAL_MILESTONES: Milestone[] = [
     id: 'cooing_sounds',
     title: 'First coos',
     category: 'social',
-    minAgeDays: 45,
+    minAgeDays: 75,
     description: 'Vowel-like sounds when you talk to them.',
     educationalInsight: MILESTONE_NOTES['cooing_sounds'] || '',
     unlocked: false
@@ -95,7 +95,7 @@ export const INITIAL_MILESTONES: Milestone[] = [
     id: 'hands_to_mouth',
     title: 'Hands to mouth',
     category: 'cognitive',
-    minAgeDays: 35,
+    minAgeDays: 90,
     description: 'Finds their own hands and sucks on them.',
     educationalInsight: MILESTONE_NOTES['hands_to_mouth'] || '',
     unlocked: false
@@ -104,7 +104,7 @@ export const INITIAL_MILESTONES: Milestone[] = [
     id: 'longer_night_stretch',
     title: 'First longer night stretch',
     category: 'sleep_growth',
-    minAgeDays: 60,
+    minAgeDays: 75,
     description: 'Sleeps four hours or more in one go at night.',
     educationalInsight: MILESTONE_NOTES['longer_night_stretch'] || '',
     unlocked: false
@@ -113,7 +113,7 @@ export const INITIAL_MILESTONES: Milestone[] = [
     id: 'entering_social_infant',
     title: 'Becoming more social',
     category: 'social',
-    minAgeDays: 57,
+    minAgeDays: 56,
     description: 'Awake for longer, smiling and interacting more.',
     educationalInsight: MILESTONE_NOTES['entering_social_infant'] || '',
     unlocked: false
@@ -122,7 +122,7 @@ export const INITIAL_MILESTONES: Milestone[] = [
     id: 'entering_infant_4_6mo',
     title: 'Four months and growing',
     category: 'cognitive',
-    minAgeDays: 120,
+    minAgeDays: 119,
     description: 'Stronger, more curious, starting to move.',
     educationalInsight: MILESTONE_NOTES['entering_infant_4_6mo'] || '',
     unlocked: false
@@ -131,7 +131,7 @@ export const INITIAL_MILESTONES: Milestone[] = [
     id: 'rolls_over',
     title: 'Rolling over',
     category: 'motor',
-    minAgeDays: 120,
+    minAgeDays: 135,
     description: 'Rolls over by themselves during play.',
     educationalInsight: MILESTONE_NOTES['rolls_over'] || '',
     unlocked: false
@@ -140,7 +140,7 @@ export const INITIAL_MILESTONES: Milestone[] = [
     id: 'first_solid_food',
     title: 'First taste of solids',
     category: 'cognitive',
-    minAgeDays: 120,
+    minAgeDays: 180,
     description: 'A first spoonful of something other than milk.',
     educationalInsight: MILESTONE_NOTES['first_solid_food'] || '',
     unlocked: false

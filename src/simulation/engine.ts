@@ -10,6 +10,7 @@ import {
   CareActionRecord, 
   CaregiverEffectivenessStats,
   DevelopmentalStage,
+  EventSnapshot,
   DifficultyMode, 
   Milestone, 
   Parent, 
@@ -26,6 +27,24 @@ import { advanceDevelopmentalAge, DEFAULT_COMPRESSION_SCHEDULE, getDevelopmental
 /** Stable-enough IDs based on simulation time (not wall clock) plus a short random suffix. */
 export function makeId(prefix: string, simTime: number): string {
   return `${prefix}_${Math.floor(simTime)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+export function snapshotOf(state: BabyState, simTime: number, isNight: boolean, ageDays: number): EventSnapshot {
+  return {
+    hunger: Math.round(state.hunger),
+    sleepiness: Math.round(state.sleepiness),
+    gasDiscomfort: Math.round(state.gasDiscomfort),
+    diaperSoiled: Math.round(state.diaperSoiled),
+    diaperType: state.diaperType,
+    comfort: Math.round(state.comfort),
+    awakeMinutes: Math.round(state.awakeMinutesElapsed),
+    sleepMinutes: Math.round(state.sleepMinutesElapsed),
+    isSleeping: state.isSleeping,
+    isNight,
+    minutesSinceFeed: Math.max(0, Math.round((simTime - state.lastFedTimestamp) / 60000)),
+    minutesSinceDiaper: Math.max(0, Math.round((simTime - state.lastDiaperTimestamp) / 60000)),
+    developmentalAgeDays: ageDays
+  };
 }
 
 export function isNighttimeHour(hour: number, settings: SimulationSettings): boolean {
@@ -192,6 +211,7 @@ export class SimulationEngine {
               dayNumber: ageDays,
               type: isSleepRegression ? 'sleep_regression' : 'night_waking',
               source: 'system',
+              snapshot: snapshotOf(nextState, simTime, isNighttime, ageDays),
               title: isSleepRegression ? 'A rough night' : 'Night waking',
               description: isSleepRegression
                 ? `${baby.name} woke between sleep cycles during a rough patch of sleep.`
@@ -231,6 +251,7 @@ export class SimulationEngine {
             dayNumber: ageDays,
             type: 'rolls_over',
             source: 'system',
+            snapshot: snapshotOf(nextState, simTime, isNighttime, ageDays),
             title: `${baby.name} rolled over`,
             description: `${baby.name} rolled over on the play mat for the first time.`,
             educationalNote: EVENT_NOTES.rolls_over.body,
@@ -262,6 +283,7 @@ export class SimulationEngine {
             dayNumber: ageDays,
             type: 'diaper_blowout',
             source: 'system',
+            snapshot: snapshotOf(nextState, simTime, isNighttime, ageDays),
             title: 'Nappy leak and clothes change',
             description: `${baby.name}'s nappy leaked. A full change of clothes is needed.`,
             educationalNote: EVENT_NOTES.diaper_blowout.body,
@@ -326,6 +348,7 @@ export class SimulationEngine {
         dayNumber: ageDays,
         type: 'crying_spell',
         source: 'system',
+        snapshot: snapshotOf(nextState, simTime, isNighttime, ageDays),
         title: `${baby.name} is crying`,
         description: `${baby.name} has been crying for a while. ${nextState.mood === 'inconsolable' ? 'It is getting harder to settle them.' : 'Something needs attention.'}`,
         educationalNote: EVENT_NOTES.crying_spell.body,
@@ -373,18 +396,15 @@ export class SimulationEngine {
     for (let i = 0; i < updatedMilestones.length; i++) {
       const m = updatedMilestones[i];
       if (!m.unlocked && ageDays >= m.minAgeDays) {
-        let conditionMet = false;
-        if (m.id === 'focus_faces' && ageDays >= 3) conditionMet = true;
-        if (m.id === 'first_social_smile' && ageDays >= 28 && nextState.comfort > 70) conditionMet = true;
-        if (m.id === 'tummy_head_lift' && ageDays >= 14) conditionMet = true;
-        if (m.id === 'cooing_sounds' && ageDays >= 45 && (nextState.mood === 'playful' || stage !== 'newborn')) conditionMet = true;
-        if (m.id === 'hands_to_mouth' && ageDays >= 35) conditionMet = true;
-        if (m.id === 'longer_night_stretch' && ageDays >= 60 && nextState.sleepMinutesElapsed >= 240) conditionMet = true;
-        if (m.id === 'entering_social_infant' && ageDays >= 57) conditionMet = true;
-        if (m.id === 'entering_infant_4_6mo' && ageDays >= 120) conditionMet = true;
-        if (m.id === 'sleep_regression_4mo' && ageDays >= 120) conditionMet = true;
-        if (m.id === 'rolls_over' && ageDays >= 120 && (nextState.awakeMinutesElapsed > 10 || ageDays >= 135)) conditionMet = true;
-        if (m.id === 'first_solid_food' && ageDays >= 120 && nextState.lastSolidsTimestamp !== undefined) conditionMet = true;
+        // Age gate comes from initialData (aligned with published "most babies by N months" windows);
+        // some milestones also need the right moment (a content, awake baby; a real long sleep; an actual first taste).
+        let conditionMet = true;
+        if (m.id === 'first_social_smile' && !(nextState.comfort > 70 && !nextState.isSleeping)) conditionMet = false;
+        if (m.id === 'cooing_sounds' && !(nextState.mood === 'playful' || nextState.mood === 'quiet_alert')) conditionMet = false;
+        if (m.id === 'tummy_head_lift' && (simTime - nextState.lastTummyTimeTimestamp) > 3 * 24 * 60 * 60 * 1000 && ageDays < 56) conditionMet = false;
+        if (m.id === 'longer_night_stretch' && nextState.sleepMinutesElapsed < 240) conditionMet = false;
+        if (m.id === 'rolls_over' && !(nextState.awakeMinutesElapsed > 10 || ageDays >= 150)) conditionMet = false;
+        if (m.id === 'first_solid_food' && nextState.lastSolidsTimestamp === undefined) conditionMet = false;
 
         if (conditionMet) {
           updatedMilestones[i] = {
@@ -399,6 +419,7 @@ export class SimulationEngine {
             dayNumber: ageDays,
             type: 'developmental_milestone',
             source: 'system',
+            snapshot: snapshotOf(nextState, simTime, isNighttime, ageDays),
             title: `Milestone: ${m.title}`,
             description: `${baby.name}: ${m.description}`,
             educationalNote: MILESTONE_NOTES[m.id] || EVENT_NOTES.developmental_milestone.body,
