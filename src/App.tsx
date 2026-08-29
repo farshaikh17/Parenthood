@@ -25,6 +25,7 @@ import {
 import { SimulationEngine } from './simulation/engine';
 import { runAwayCatchup } from './simulation/autopilot';
 import { getCareDayNumber, getDevelopmentalAgeDays, isJourneyComplete } from './simulation/clock';
+import { autoJournalEntry } from './simulation/report';
 import { accumulateAction, accumulateTick } from './simulation/dayLog';
 import { Disclaimer } from './components/Disclaimer';
 import { 
@@ -182,6 +183,16 @@ export default function App() {
     return () => clearInterval(interval);
   }, [baby, babyState, parents, settings, events, milestones, userProfile]);
 
+  // At the end of every care day, write a factual journal entry automatically (no AI, no invention)
+  useEffect(() => {
+    if (!baby) return;
+    const today = getCareDayNumber(baby, settings);
+    const missing = dayLogs.filter(d => d.dayNumber < today && !journalEntries.some(j => j.dayNumber === d.dayNumber));
+    if (missing.length === 0) return;
+    const entries = missing.map(d => autoJournalEntry(baby, d.dayNumber, d, baby.birthTimestamp + (d.dayNumber + 1) * 86400000, milestones, events));
+    setJournalEntries(prev => [...entries.reverse(), ...prev]);
+  }, [baby, settings.simulatedTimeMs, dayLogs, journalEntries, milestones, events]);
+
   // When the tab is hidden and shown again, run the away policy so a long background pause behaves like closing the app
   useEffect(() => {
     const onVisible = () => {
@@ -314,7 +325,7 @@ export default function App() {
     if (actionType === 'feed' || actionType === 'cuddle' || actionType === 'rock' || actionType === 'change_diaper' || actionType === 'burp' || actionType === 'put_to_sleep') {
       setEvents(prev => prev.map(e => {
         if (!e.resolved && (e.type === 'crying_spell' || e.type === 'hunger_cue' || e.type === 'diaper_blowout' || e.type === 'evening_fussiness' || e.type === 'night_waking' || e.type === 'sleep_regression')) {
-          return { ...e, resolved: true, resolvedAt: settings.simulatedTimeMs };
+          return { ...e, resolved: true, resolvedAt: settings.simulatedTimeMs, resolvedBy: 'user' as const };
         }
         return e;
       }));
@@ -335,7 +346,7 @@ export default function App() {
 
   // Resolve Event
   const handleResolveEvent = (eventId: string) => {
-    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, resolved: true, resolvedAt: settings.simulatedTimeMs } : e));
+    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, resolved: true, resolvedAt: settings.simulatedTimeMs, resolvedBy: 'user' as const } : e));
   };
 
   // Reset Simulation

@@ -254,6 +254,7 @@ export interface SimulationEvent {
   severity: 'info' | 'warning' | 'urgent';
   resolved: boolean;
   resolvedAt?: number;
+  resolvedBy?: RecordSource;
 }
 
 export interface Milestone {
