@@ -306,6 +306,7 @@ export default function App() {
 
     setBabyState(result.nextState);
     setParents(result.nextParents);
+    setBaby(result.nextBaby);
     setActionRecords(prev => [result.record, ...prev]);
     setDayLogs(prev => accumulateAction(prev, getCareDayNumber(baby, settings), result.record));
 
@@ -456,6 +457,9 @@ export default function App() {
             babyState={babyState || undefined}
             onSwitchActiveParent={handleSwitchActiveParent}
             onOpenSelfCare={() => setActiveActionModal('parent_break')}
+            actionRecords={actionRecords}
+            events={events}
+            dayLogs={dayLogs}
           />
         )}
 
@@ -476,6 +480,7 @@ export default function App() {
             recentEvents={events}
             actionRecords={actionRecords}
             dayLogs={dayLogs}
+            babyState={babyState || undefined}
             simulatedTimeMs={settings.simulatedTimeMs}
             onAddJournalEntry={(entry) => setJournalEntries(prev => [entry, ...prev])}
           />

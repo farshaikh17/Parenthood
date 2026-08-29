@@ -82,6 +82,19 @@ export interface BabyTemperament {
   cryIntensity: 'gentle' | 'moderate' | 'loud' | 'piercing';
 }
 
+/** Hidden personality parameters. Derived from temperament + seed at creation; some drift with experience. */
+export interface BabyPersonality {
+  seed: number;
+  soothability: number;      // 0.6 (hard to settle) – 1.4 (settles easily)
+  hungerTolerance: number;   // 0.6 (hungry often) – 1.4 (goes longer)
+  sleepCycleFactor: number;  // scales sleep cycle length
+  sensitivity: number;       // 0–1: reacts to noise/light/handling
+  sociability: number;       // 0–1: how much interaction they seek
+  cryIntensity: 'gentle' | 'moderate' | 'loud' | 'piercing';
+  settleInCotSkill: number;  // 0–100, grows with successful cot settling
+  heldToSleepHabit: number;  // 0–100, grows when usually held to sleep
+}
+
 export interface Baby {
   id: string;
   name: string;
@@ -95,6 +108,7 @@ export interface Baby {
   birthTimestamp: number; // Care-clock timestamp of birth
   /** Developmental age (fractional days). Advances faster than the care clock per the compression schedule. */
   developmentalAgeDays: number;
+  personality?: BabyPersonality;
 }
 
 /** One row of the compression schedule: until this developmental age, N developmental days pass per real day. */
