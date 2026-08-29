@@ -37,6 +37,7 @@ import {
 import { soundFx } from '../utils/audio';
 import { getDevelopmentalStage, isNighttimeHour } from '../simulation/engine';
 import { formatLength, formatWeight } from '../utils/units';
+import { formatDevelopmentalAge, getCareDayNumber, getDevelopmentalAgeDays } from '../simulation/clock';
 
 interface DashboardScreenProps {
   baby: Baby;
@@ -68,7 +69,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const activeParent = parents.find(p => p.id === userProfile.activeParentId) || parents[0];
   const otherParent = parents.find(p => p.id !== userProfile.activeParentId);
 
-  const ageDays = Math.max(0, Math.floor((settings.simulatedTimeMs - baby.birthTimestamp) / (24 * 60 * 60 * 1000)));
+  const ageDays = getDevelopmentalAgeDays(baby);
+  const careDay = getCareDayNumber(baby, settings);
   const stage = getDevelopmentalStage(ageDays);
   const simDate = new Date(settings.simulatedTimeMs);
   const timeString = simDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -217,7 +219,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <div className="flex items-center space-x-2">
               <h2 className="text-xl font-bold text-stone-100 tracking-tight">{baby.name}</h2>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-stone-700 text-stone-300 font-mono">
-                {ageDays === 0 ? 'Newborn (Day 1)' : `${ageDays}d old`}
+                {formatDevelopmentalAge(ageDays)}
               </span>
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                 stage === 'infant_4_6mo' 
@@ -230,7 +232,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               </span>
             </div>
             <p className="text-xs text-stone-400 mt-0.5">
-              {formatWeight(baby.currentWeightGrams, settings.unitSystem)} • {formatLength(baby.currentLengthCm, settings.unitSystem)}
+              Day {careDay + 1} together • {formatWeight(baby.currentWeightGrams, settings.unitSystem)} • {formatLength(baby.currentLengthCm, settings.unitSystem)}
             </p>
           </div>
 
@@ -389,7 +391,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </span>
         </div>
 
-        <div className={`grid ${stage === 'infant_4_6mo' ? 'grid-cols-4' : 'grid-cols-4'} gap-2`}>
+        <div className="grid grid-cols-4 gap-2">
           
           <button
             onClick={() => onOpenActionModal('feed')}
@@ -401,7 +403,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <span className="text-xs font-semibold">Milk</span>
           </button>
 
-          {stage === 'infant_4_6mo' && (
+          {ageDays >= 180 && (
             <button
               onClick={() => onOpenActionModal('feed_solids')}
               className="p-3 rounded-2xl bg-stone-800/70 hover:bg-orange-950/50 border border-stone-700/60 hover:border-orange-700 text-stone-200 flex flex-col items-center justify-center space-y-1.5 transition-all shadow-sm group"

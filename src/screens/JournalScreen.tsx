@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Baby, CareActionRecord, DayLog, JournalEntry, Milestone, Parent, SimulationEvent } from '../types';
 import { getDayLog, summarizeDay } from '../simulation/dayLog';
 import { MILESTONE_NOTES } from '../content/copy';
+import { formatDevelopmentalAge, getDevelopmentalAgeDays } from '../simulation/clock';
 import { 
   BookOpen, 
   Sparkles, 
@@ -46,7 +47,9 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
   const [isGeneratingAI, setIsGeneratingAI] = useState<boolean>(false);
   const [parentNote, setParentNote] = useState<string>('');
 
+  // "Day N" = real days of caring; developmental age is shown separately
   const ageDays = Math.max(0, Math.floor((simulatedTimeMs - baby.birthTimestamp) / (24 * 60 * 60 * 1000)));
+  const devAgeDays = getDevelopmentalAgeDays(baby);
 
   const handleGenerateReflection = async () => {
     setIsGeneratingAI(true);
@@ -71,7 +74,8 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           babyName: baby.name,
-          ageDays,
+          ageDays: devAgeDays,
+          careDay: ageDays + 1,
           temperament: baby.temperament,
           caregivers: parents.map(p => p.name),
           dayStats: stats,
@@ -90,7 +94,7 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
 
     // Offline / failure fallback is built ONLY from real counters
     if (!reflection) {
-      reflection = `Day ${ageDays}: ${stats.feedsCount} feed${stats.feedsCount === 1 ? '' : 's'}, ${stats.diapersCount} nappy change${stats.diapersCount === 1 ? '' : 's'}, about ${stats.sleepHoursTotal} hours of sleep and ${stats.cryingMinutesTotal} minutes of crying so far.` +
+      reflection = `Day ${ageDays + 1}: ${stats.feedsCount} feed${stats.feedsCount === 1 ? '' : 's'}, ${stats.diapersCount} nappy change${stats.diapersCount === 1 ? '' : 's'}, about ${stats.sleepHoursTotal} hours of sleep and ${stats.cryingMinutesTotal} minutes of crying so far.` +
         (todayLog.nightWakings > 0 ? ` ${todayLog.nightWakings} night waking${todayLog.nightWakings === 1 ? '' : 's'}.` : '') +
         (todayLog.autopilotActions > 0 ? ` ${todayLog.autopilotActions} of the care actions happened while you were away.` : '');
     }
@@ -99,7 +103,7 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
       id: `journal_${Date.now()}`,
       dayNumber: ageDays,
       simDateString: new Date(simulatedTimeMs).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
-      title: `Day ${ageDays}`,
+      title: `Day ${ageDays + 1} • ${formatDevelopmentalAge(devAgeDays)}`,
       summary: `${stats.feedsCount} feeds • ${stats.diapersCount} changes • ${stats.sleepHoursTotal}h sleep • ${stats.cryingMinutesTotal} min crying`,
       reflection,
       educationalInsight: insight,
@@ -161,7 +165,7 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
           <div className="p-4 rounded-2xl bg-teal-950/30 border border-teal-800/50 space-y-3">
             <div className="flex items-center space-x-2">
               <Sparkles className="w-4 h-4 text-teal-400" />
-              <h3 className="text-xs font-bold text-teal-200">Generate Day {ageDays} Reflection</h3>
+              <h3 className="text-xs font-bold text-teal-200">Day {ageDays + 1} with {baby.name}</h3>
             </div>
             <p className="text-[11px] text-stone-300 leading-relaxed">
               Writes a short entry from what actually happened today — feeds, changes, sleep, crying and your actions. Nothing is invented.

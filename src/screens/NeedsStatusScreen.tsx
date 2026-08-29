@@ -20,7 +20,8 @@ import {
 } from 'lucide-react';
 import { EducationalCard } from '../components/EducationalCard';
 import { EDUCATIONAL_TOPICS } from '../content/copy';
-import { getDevelopmentalStage } from '../simulation/engine';
+import { getDevelopmentalStage, SOLIDS_MIN_AGE_DAYS } from '../simulation/engine';
+import { getDevelopmentalAgeDays } from '../simulation/clock';
 
 interface NeedsStatusScreenProps {
   baby: Baby;
@@ -39,8 +40,9 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
   unitSystem,
   onOpenAction
 }) => {
-  const ageDays = Math.max(0, Math.floor((simulatedTimeMs - baby.birthTimestamp) / (24 * 60 * 60 * 1000)));
+  const ageDays = getDevelopmentalAgeDays(baby);
   const stage = getDevelopmentalStage(ageDays);
+  void stage; void simulatedTimeMs;
 
   return (
     <div className="flex-1 p-4 space-y-4 text-stone-100 overflow-y-auto animate-in fade-in duration-200">
@@ -105,7 +107,7 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
         </div>
 
         {/* 1b. Complementary Solids Need (4-6 Month Stage) */}
-        {stage === 'infant_4_6mo' && (
+        {ageDays >= SOLIDS_MIN_AGE_DAYS && (
           <div className="p-3.5 rounded-2xl bg-stone-800/40 border border-orange-900/40 space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
@@ -114,7 +116,7 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
                 </div>
                 <div>
                   <span className="text-xs font-bold text-stone-200">Interest in solids</span>
-                  <span className="text-[10px] text-stone-400 block">Small tastes alongside milk (4–6 month stage)</span>
+                  <span className="text-[10px] text-stone-400 block">Small tastes alongside milk (around 6 months)</span>
                 </div>
               </div>
               <span className="text-xs font-mono font-bold text-orange-300">{Math.round(babyState.solidFoodHunger || 0)}%</span>

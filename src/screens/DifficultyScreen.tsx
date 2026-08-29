@@ -107,7 +107,7 @@ export const DifficultyScreen: React.FC<DifficultyScreenProps> = ({ onNext, onBa
             />
           </div>
           <p className="text-[11px] text-stone-300 leading-relaxed">
-            When on, the baby wakes during simulated night hours (10 PM–7 AM) and needs you. Later versions may send real notifications during your night — only if you allow it. You can change this any time in Settings.
+            Care runs in real time, so night is your real night. When on, the baby can wake between 10 PM and 7 AM and need you. Later versions may send real notifications during your night — only if you allow it. You can change this any time in Settings.
           </p>
           <p className="text-[10px] text-stone-400 italic">
             Right now, night wakings happen inside the app only. Nothing will buzz your phone while the app is closed.

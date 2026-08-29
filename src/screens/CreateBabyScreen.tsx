@@ -46,7 +46,8 @@ export const CreateBabyScreen: React.FC<CreateBabyScreenProps> = ({ unitSystem, 
       temperament,
       currentWeightGrams: grams,
       currentLengthCm: cm,
-      birthTimestamp: Date.now()
+      birthTimestamp: Date.now(),
+      developmentalAgeDays: 0
     };
 
     onComplete(newBaby);

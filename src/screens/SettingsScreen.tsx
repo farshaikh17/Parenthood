@@ -5,7 +5,8 @@
 
 import React from 'react';
 import { SimulationSettings, UnitSystem } from '../types';
-import { DISCLAIMER_LONG } from '../content/copy';
+import { DISCLAIMER_LONG, TIME_MODEL_EXPLAINER } from '../content/copy';
+import { estimateRealDays } from '../simulation/clock';
 import { 
   Settings as SettingsIcon, 
   ShieldAlert, 
@@ -72,6 +73,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Time model */}
+      <div className="p-4 rounded-2xl bg-stone-800/40 border border-stone-700/60 space-y-2">
+        <div className="flex items-center space-x-2 text-xs font-bold text-stone-200">
+          <Clock className="w-4 h-4 text-teal-400" />
+          <span>How time works</span>
+        </div>
+        <p className="text-[11px] text-stone-400 leading-relaxed">{TIME_MODEL_EXPLAINER}</p>
+        <p className="text-[10px] text-stone-500">
+          Current schedule: about {estimateRealDays(settings.compressionSchedule)} real days for six months.
+          {settings.compressionSchedule.map(s => ` ≤${s.untilAgeDays}d: ${s.devDaysPerRealDay}×`).join(' ·')}
+        </p>
       </div>
 
       {/* Away policy */}

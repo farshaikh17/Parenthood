@@ -36,7 +36,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStart }) => {
           <div className="text-xs space-y-0.5">
             <h2 className="font-semibold text-stone-200 text-xs">A baby that keeps going</h2>
             <p className="text-stone-400 leading-relaxed">
-              Not a game. The baby lives on the simulation's clock — even while the app is closed — and needs feeding, changing, settling and you.
+              Not a game. Care happens in real time — feeds are hours apart, night is your night — and the baby keeps living while the app is closed. Six months of development fit into about six to eight real weeks.
             </p>
           </div>
         </div>
