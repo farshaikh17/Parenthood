@@ -26,7 +26,7 @@ async function startServer() {
   // AI Journal reflection — grounded ONLY in the structured day log the client sends.
   app.post("/api/gemini/journal-reflection", async (req, res) => {
     try {
-      const { babyName, ageDays, careDay, temperament, caregivers, dayStats, events, actions, milestonesToday, parentNote } = req.body || {};
+      const { babyName, ageDays, careDay, temperament, caregivers, dayStats, events, actions, milestonesToday, memory, parentNote } = req.body || {};
       const ai = getGeminiClient();
       const stats = dayStats || {};
 
@@ -51,6 +51,7 @@ Day counters (authoritative): ${JSON.stringify(stats)}
 Events today: ${JSON.stringify(events || [])}
 Care actions today (by = who did it; "autopilot" means simulated care while the user was away): ${JSON.stringify(actions || [])}
 Milestones reached today: ${JSON.stringify(milestonesToday || [])}
+What the baby has learned so far (facts from records; you may mention them, never extend them): ${JSON.stringify(memory || [])}
 Parent's own note (quote or paraphrase only if present): ${parentNote ? JSON.stringify(parentNote) : "none"}
 
 Respond in valid JSON: {"reflection": string, "milestoneInsight": string}
