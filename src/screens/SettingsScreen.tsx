@@ -19,22 +19,31 @@ import {
   Info, 
   Clock, 
   Ruler,
-  Zap
+  Zap,
+  Smartphone
 } from 'lucide-react';
+import { HouseholdSync } from '../sync/useHouseholdSync';
 
 interface SettingsScreenProps {
   settings: SimulationSettings;
   onUpdateSettings: (newSettings: Partial<SimulationSettings>) => void;
   onResetSimulation: () => void;
   userId?: string;
+  sync?: HouseholdSync;
+  babyName?: string;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   settings,
   onUpdateSettings,
   onResetSimulation,
-  userId
+  userId,
+  sync,
+  babyName
 }) => {
+  const [joinCode, setJoinCode] = useState('');
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [confirmJoin, setConfirmJoin] = useState(false);
   const [pushCap, setPushCap] = useState<PushCapability | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushMessage, setPushMessage] = useState<string | null>(null);
@@ -75,7 +84,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <span className="text-[10px] uppercase font-bold text-teal-400 font-mono">Settings</span>
           <h2 className="text-base font-bold text-stone-100 mt-0.5">Settings</h2>
           <p className="text-xs text-stone-400">
-            Version <span className="text-teal-300 font-medium">1.7 (M7)</span>
+            Version <span className="text-teal-300 font-medium">1.8 (M8)</span>
           </p>
         </div>
 
@@ -248,6 +257,64 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </div>
       </div>
 
+      {/* Household sync (M8) */}
+      {sync && (
+        <div className="p-4 rounded-2xl bg-sky-950/30 border border-sky-800/40 space-y-3">
+          <div className="flex items-center space-x-2 text-xs font-bold text-sky-200">
+            <Smartphone className="w-4 h-4 text-sky-400" />
+            <span>Share {babyName || 'the baby'} with another phone</span>
+          </div>
+          {!sync.configured ? (
+            <p className="text-[11px] text-stone-300 leading-relaxed">
+              Sharing between two phones needs the sync server, which is not connected in this build. Everything stays on this phone.
+            </p>
+          ) : sync.code ? (
+            <div className="space-y-2 text-[11px] text-stone-300 leading-relaxed">
+              <p>Household code: <span className="font-mono text-base text-sky-200 tracking-widest">{sync.code}</span></p>
+              <p>Type this code on the other phone (Settings → Share) and it sees the same baby.</p>
+              <p className="text-sky-200">
+                {sync.isLeader ? 'This phone is caring right now.' : `${sync.leaderName || 'The other phone'} is caring right now — this phone is watching.`}
+                {sync.lastSyncAt ? ` Last synced ${new Date(sync.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.` : ''}
+              </p>
+              {sync.status && <p className="text-amber-200">{sync.status}</p>}
+              <div className="flex items-center space-x-2">
+                <span className="text-stone-400">This phone's name:</span>
+                <input value={sync.deviceName} onChange={(e) => sync.renameDevice(e.target.value)} className="flex-1 bg-stone-950/60 border border-stone-700 rounded-lg px-2 py-1 text-[11px] text-stone-100" />
+              </div>
+              <button onClick={() => sync.leave()} className="px-2.5 py-1 rounded-lg text-[10px] font-semibold border bg-stone-800 border-stone-600 text-stone-200">Stop sharing on this phone</button>
+            </div>
+          ) : (
+            <div className="space-y-2 text-[11px] text-stone-300 leading-relaxed">
+              <p>Both parents can care for the same baby from their own phones. The phone that acted last runs the simulation; the other watches, and takes over the moment you do something there.</p>
+              <div className="flex items-center space-x-2">
+                <button
+                  disabled={syncBusy}
+                  onClick={async () => { setSyncBusy(true); await sync.create(); setSyncBusy(false); }}
+                  className="px-2.5 py-1 rounded-lg text-[10px] font-semibold border bg-sky-700 border-sky-600 text-white disabled:opacity-40"
+                >
+                  {syncBusy ? '…' : 'Get a household code'}
+                </button>
+                <span className="text-stone-500">or</span>
+                <input value={joinCode} onChange={(e) => { setJoinCode(e.target.value); setConfirmJoin(false); }} placeholder="ABCD-2345" className="w-28 bg-stone-950/60 border border-stone-700 rounded-lg px-2 py-1 text-[11px] font-mono text-stone-100 uppercase" />
+                <button
+                  disabled={syncBusy || joinCode.replace(/[^A-Za-z0-9]/g, '').length !== 8}
+                  onClick={async () => {
+                    if (!confirmJoin) { setConfirmJoin(true); return; }
+                    setSyncBusy(true); await sync.join(joinCode); setSyncBusy(false); setConfirmJoin(false);
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-[10px] font-semibold border bg-stone-800 border-stone-600 text-stone-200 disabled:opacity-40"
+                >
+                  {confirmJoin ? 'Yes, replace' : 'Join'}
+                </button>
+              </div>
+              {confirmJoin && <p className="text-amber-200">Joining replaces the baby on this phone with the shared one. Tap "Yes, replace" to continue.</p>}
+              {sync.status && <p className="text-amber-200">{sync.status}</p>}
+              <p className="text-[10px] text-stone-500">What is stored on the server: the whole save (baby, timeline, journal) under the code, nothing else. Anyone with the code can see it, so share it only with your partner. No account, no email.</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Section 4: Audio Cues Toggle */}
       <div className="p-4 rounded-2xl bg-stone-800/40 border border-stone-700/60 flex items-center justify-between">
         <div className="space-y-0.5">
@@ -272,7 +339,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <span>Delete this simulation</span>
         </div>
         <p className="text-[11px] text-stone-400">
-          Deletes the baby, parents, timeline and journal stored on this device and starts over. Data is stored only on this device; the journal text is sent to an AI service when you ask for an entry.
+          Deletes the baby, parents, timeline and journal stored on this device and starts over. Data is stored on this device (and on the sync server while you share a household code); the journal text is sent to an AI service when you ask for an entry.
         </p>
         <button
           onClick={() => {
