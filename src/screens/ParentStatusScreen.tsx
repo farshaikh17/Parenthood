@@ -19,7 +19,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { EducationalCard } from '../components/EducationalCard';
-import { EDUCATIONAL_TOPICS } from '../simulation/initialData';
+import { EDUCATIONAL_TOPICS } from '../content/copy';
 
 interface ParentStatusScreenProps {
   parents: Parent[];
@@ -178,10 +178,10 @@ export const ParentStatusScreen: React.FC<ParentStatusScreenProps> = ({
                     <div className="flex items-center justify-between text-xs">
                       <div className="flex items-center space-x-1 text-stone-300 font-medium">
                         <Heart className="w-3.5 h-3.5 text-rose-400" />
-                        <span>Soothing Memory & Attachment</span>
+                        <span>How {baby ? baby.name : 'the baby'} responds to {p.name}</span>
                       </div>
                       <span className={`font-mono text-[11px] font-bold ${affinity >= 70 ? 'text-teal-300' : 'text-amber-300'}`}>
-                        {hasHistory ? `${affinity}% Affinity` : 'Initial Bond (50%)'}
+                        {hasHistory ? `${affinity}%` : 'Getting to know each other'}
                       </span>
                     </div>
 
@@ -202,7 +202,7 @@ export const ParentStatusScreen: React.FC<ParentStatusScreenProps> = ({
                       </div>
                     ) : (
                       <p className="text-[10px] text-stone-400 italic">
-                        {baby ? `${baby.name} is developing familiarity with ${p.name}'s touch and voice.` : `No soothing sessions recorded yet for ${p.name}.`}
+                        {baby ? `${baby.name} is still getting used to ${p.name}.` : `No soothing recorded yet for ${p.name}.`}
                       </p>
                     )}
                   </div>
@@ -225,7 +225,7 @@ export const ParentStatusScreen: React.FC<ParentStatusScreenProps> = ({
           </div>
 
           <p className="text-[11px] text-stone-400 leading-relaxed">
-            Sharing the nighttime burden and validating each other's emotional exhaustion reduces relationship strain significantly.
+            In the simulation this reflects how evenly the work and the broken nights are shared. It is an observation, not a judgement.
           </p>
         </div>
       )}
@@ -233,24 +233,20 @@ export const ParentStatusScreen: React.FC<ParentStatusScreenProps> = ({
       {/* Self-Care Button */}
       <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-800/40 flex items-center justify-between">
         <div className="space-y-0.5">
-          <h4 className="text-xs font-bold text-amber-200">Need a 10-Minute Parent Pause?</h4>
-          <p className="text-[10px] text-stone-400">Step away for hydration and stress downregulation.</p>
+          <h4 className="text-xs font-bold text-amber-200">Need ten minutes?</h4>
+          <p className="text-[10px] text-stone-400">Step away. It helps a little; the work is still there after.</p>
         </div>
         <button
           onClick={onOpenSelfCare}
           className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-medium text-xs shadow-md shadow-amber-950/40 flex items-center space-x-1.5"
         >
           <Coffee className="w-3.5 h-3.5" />
-          <span>Self-Care Break</span>
+          <span>Take a break</span>
         </button>
       </div>
 
       {/* Educational Insight Card */}
-      <EducationalCard
-        title={EDUCATIONAL_TOPICS[4].title}
-        summary={EDUCATIONAL_TOPICS[4].summary}
-        content={EDUCATIONAL_TOPICS[4].content}
-      />
+      <EducationalCard item={EDUCATIONAL_TOPICS[4]} />
 
     </div>
   );

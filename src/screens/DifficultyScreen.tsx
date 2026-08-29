@@ -4,17 +4,18 @@
  */
 
 import React, { useState } from 'react';
-import { DifficultyMode } from '../types';
-import { ShieldAlert, Flame, Check, ArrowRight, ArrowLeft, Bell } from 'lucide-react';
+import { DifficultyMode, UnitSystem } from '../types';
+import { ShieldAlert, Flame, Check, ArrowRight, ArrowLeft, Bell, Ruler } from 'lucide-react';
 
 interface DifficultyScreenProps {
-  onNext: (difficulty: DifficultyMode, nighttimeAlerts: boolean) => void;
+  onNext: (difficulty: DifficultyMode, nighttimeAlerts: boolean, unitSystem: UnitSystem) => void;
   onBack: () => void;
 }
 
 export const DifficultyScreen: React.FC<DifficultyScreenProps> = ({ onNext, onBack }) => {
   const [difficulty, setDifficulty] = useState<DifficultyMode>('realistic');
   const [nighttimeAlerts, setNighttimeAlerts] = useState<boolean>(false);
+  const [unitSystem, setUnitSystem] = useState<UnitSystem>('imperial');
 
   return (
     <div className="flex-1 flex flex-col justify-between p-6 bg-stone-900 text-stone-100 animate-in fade-in duration-200 overflow-y-auto">
@@ -29,13 +30,13 @@ export const DifficultyScreen: React.FC<DifficultyScreenProps> = ({ onNext, onBa
           </button>
           <div>
             <span className="text-[10px] uppercase tracking-wider text-teal-400 font-bold font-mono">Step 3 of 4</span>
-            <h2 className="text-lg font-bold text-stone-100">Simulation Realism</h2>
+            <h2 className="text-lg font-bold text-stone-100">How demanding should it be?</h2>
           </div>
         </div>
 
         {/* Difficulty Selector */}
         <div className="space-y-3">
-          <label className="text-xs font-semibold text-stone-300 block">Choose Simulation Rigor</label>
+          <label className="text-xs font-semibold text-stone-300 block">Difficulty</label>
           
           <button
             type="button"
@@ -59,7 +60,7 @@ export const DifficultyScreen: React.FC<DifficultyScreenProps> = ({ onNext, onBa
               {difficulty === 'realistic' && <Check className="w-5 h-5 text-teal-400" />}
             </div>
             <p className="mt-3 text-xs text-stone-400 leading-relaxed">
-              Demanding but balanced newborn care. Follows standard 2-3 hour feeding cycles, predictable wake windows, and standard soothing response curves.
+              Demanding but manageable. Feeds, naps and crying follow the baby's own rhythm, which is not a fixed timetable.
             </p>
           </button>
 
@@ -79,13 +80,13 @@ export const DifficultyScreen: React.FC<DifficultyScreenProps> = ({ onNext, onBa
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-stone-100">Hardcore</h3>
-                  <span className="text-[10px] text-rose-400 font-medium">High disruption mode</span>
+                  <span className="text-[10px] text-rose-400 font-medium">For people who want the full picture</span>
                 </div>
               </div>
               {difficulty === 'hardcore' && <Check className="w-5 h-5 text-rose-400" />}
             </div>
             <p className="mt-3 text-xs text-stone-400 leading-relaxed">
-              Maximum parental endurance test. Includes frequent cluster feedings, spontaneous gas/colic spells, unpredictable sleep fragmentation, and overtired meltdowns.
+              More unpredictable. Feeds bunch up, settling takes longer, sleep breaks more often, and the nights are harder. Hard because babies are hard, not to annoy you.
             </p>
           </button>
         </div>
@@ -95,7 +96,7 @@ export const DifficultyScreen: React.FC<DifficultyScreenProps> = ({ onNext, onBa
           <div className="flex items-start justify-between">
             <div className="flex items-center space-x-2">
               <Bell className="w-4 h-4 text-indigo-400 shrink-0" />
-              <span className="text-xs font-bold text-indigo-200">Nighttime Awakening Simulation</span>
+              <span className="text-xs font-bold text-indigo-200">Night mode</span>
             </div>
             <input
               type="checkbox"
@@ -106,20 +107,46 @@ export const DifficultyScreen: React.FC<DifficultyScreenProps> = ({ onNext, onBa
             />
           </div>
           <p className="text-[11px] text-stone-300 leading-relaxed">
-            When enabled, the simulation generates occasional nighttime waking events (10 PM - 7 AM simulated hours) representing authentic sleep fragmentation.
+            When on, the baby wakes during simulated night hours (10 PM–7 AM) and needs you. Later versions may send real notifications during your night — only if you allow it. You can change this any time in Settings.
           </p>
           <p className="text-[10px] text-stone-400 italic">
-            Note: In this V1 prototype, nighttime events occur within the simulation clock and can be observed at 60x/300x speed without waking your real phone.
+            Right now, night wakings happen inside the app only. Nothing will buzz your phone while the app is closed.
           </p>
+        </div>
+
+        {/* Units */}
+        <div className="p-4 rounded-2xl bg-stone-800/40 border border-stone-700/60 space-y-3">
+          <div className="flex items-center space-x-2">
+            <Ruler className="w-4 h-4 text-teal-400 shrink-0" />
+            <span className="text-xs font-bold text-stone-200">Measurement units</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              { v: 'imperial', label: 'Imperial', desc: 'lb / oz, inches, fl oz' },
+              { v: 'metric', label: 'Metric', desc: 'kg / g, cm, ml' }
+            ] as { v: UnitSystem; label: string; desc: string }[]).map(u => (
+              <button
+                key={u.v}
+                type="button"
+                onClick={() => setUnitSystem(u.v)}
+                className={`p-3 rounded-xl border text-left transition-all ${
+                  unitSystem === u.v ? 'bg-teal-950 border-teal-500 text-teal-100' : 'bg-stone-900 border-stone-700 text-stone-400'
+                }`}
+              >
+                <div className="text-xs font-bold">{u.label}</div>
+                <div className="text-[10px] text-stone-400 mt-0.5">{u.desc}</div>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       <div className="pt-6">
         <button
-          onClick={() => onNext(difficulty, nighttimeAlerts)}
+          onClick={() => onNext(difficulty, nighttimeAlerts, unitSystem)}
           className="w-full py-3.5 px-6 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-sm transition-all flex items-center justify-center space-x-2 shadow-lg shadow-teal-950/50"
         >
-          <span>Continue to Baby Creation</span>
+          <span>Continue</span>
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>

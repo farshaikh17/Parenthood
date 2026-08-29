@@ -4,39 +4,48 @@
  */
 
 import React, { useState } from 'react';
-import { Baby, TemperamentType } from '../types';
+import { Baby, TemperamentType, UnitSystem } from '../types';
 import { TEMPERAMENTS } from '../simulation/initialData';
+import { inchesToCm, lbsOzToGrams } from '../utils/units';
 import { Sparkles, Heart, Scale, Ruler, ArrowRight, ArrowLeft } from 'lucide-react';
 
 interface CreateBabyScreenProps {
+  unitSystem: UnitSystem;
   onComplete: (baby: Baby) => void;
   onBack: () => void;
 }
 
-export const CreateBabyScreen: React.FC<CreateBabyScreenProps> = ({ onComplete, onBack }) => {
+const TEMPERAMENT_KEYS = Object.keys(TEMPERAMENTS) as TemperamentType[];
+
+export const CreateBabyScreen: React.FC<CreateBabyScreenProps> = ({ unitSystem, onComplete, onBack }) => {
+  const metric = unitSystem === 'metric';
   const [name, setName] = useState<string>('Emma');
   const [sex, setSex] = useState<Baby['sex']>('girl');
   const [weightLbs, setWeightLbs] = useState<number>(7);
   const [weightOz, setWeightOz] = useState<number>(6);
+  const [weightGrams, setWeightGrams] = useState<number>(3350);
   const [lengthInches, setLengthInches] = useState<number>(19.5);
-  const [temperament, setTemperament] = useState<TemperamentType>('easygoing');
+  const [lengthCm, setLengthCm] = useState<number>(49.5);
+  // Temperament is chosen for the user (hidden parameters, not a visible "class"). Advanced users can override.
+  const [temperament, setTemperament] = useState<TemperamentType>(() => TEMPERAMENT_KEYS[Math.floor(Math.random() * TEMPERAMENT_KEYS.length)]);
+  const [showTemperament, setShowTemperament] = useState<boolean>(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    const totalWeightDecimal = parseFloat((weightLbs + (weightOz / 16)).toFixed(2));
+    const grams = metric ? Math.round(weightGrams) : lbsOzToGrams(weightLbs, weightOz);
+    const cm = metric ? Math.round(lengthCm * 10) / 10 : inchesToCm(lengthInches);
 
     const newBaby: Baby = {
       id: `baby_${Date.now()}`,
       name: name.trim(),
       sex,
-      birthWeightLbs: totalWeightDecimal,
-      birthWeightOz: weightOz,
-      birthLengthInches: lengthInches,
+      birthWeightGrams: grams,
+      birthLengthCm: cm,
       temperament,
-      currentWeightLbs: totalWeightDecimal,
-      currentLengthInches: lengthInches,
+      currentWeightGrams: grams,
+      currentLengthCm: cm,
       birthTimestamp: Date.now()
     };
 
@@ -105,26 +114,41 @@ export const CreateBabyScreen: React.FC<CreateBabyScreenProps> = ({ onComplete, 
                 <Scale className="w-3.5 h-3.5 text-teal-400" />
                 <span>Weight</span>
               </div>
-              <div className="flex items-center space-x-1.5">
-                <input
-                  type="number"
-                  min="4"
-                  max="12"
-                  value={weightLbs}
-                  onChange={(e) => setWeightLbs(parseInt(e.target.value) || 7)}
-                  className="w-16 px-2 py-1.5 rounded-lg bg-stone-900 border border-stone-700 text-stone-100 text-xs text-center font-mono"
-                />
-                <span className="text-xs text-stone-400">lbs</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="15"
-                  value={weightOz}
-                  onChange={(e) => setWeightOz(parseInt(e.target.value) || 0)}
-                  className="w-16 px-2 py-1.5 rounded-lg bg-stone-900 border border-stone-700 text-stone-100 text-xs text-center font-mono"
-                />
-                <span className="text-xs text-stone-400">oz</span>
-              </div>
+              {metric ? (
+                <div className="flex items-center space-x-1.5">
+                  <input
+                    type="number"
+                    min="1500"
+                    max="6000"
+                    step="10"
+                    value={weightGrams}
+                    onChange={(e) => setWeightGrams(parseInt(e.target.value) || 3350)}
+                    className="w-24 px-2 py-1.5 rounded-lg bg-stone-900 border border-stone-700 text-stone-100 text-xs text-center font-mono"
+                  />
+                  <span className="text-xs text-stone-400">g</span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-1.5">
+                  <input
+                    type="number"
+                    min="4"
+                    max="12"
+                    value={weightLbs}
+                    onChange={(e) => setWeightLbs(parseInt(e.target.value) || 7)}
+                    className="w-16 px-2 py-1.5 rounded-lg bg-stone-900 border border-stone-700 text-stone-100 text-xs text-center font-mono"
+                  />
+                  <span className="text-xs text-stone-400">lb</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="15"
+                    value={weightOz}
+                    onChange={(e) => setWeightOz(parseInt(e.target.value) || 0)}
+                    className="w-16 px-2 py-1.5 rounded-lg bg-stone-900 border border-stone-700 text-stone-100 text-xs text-center font-mono"
+                  />
+                  <span className="text-xs text-stone-400">oz</span>
+                </div>
+              )}
             </div>
 
             <div>
@@ -132,56 +156,74 @@ export const CreateBabyScreen: React.FC<CreateBabyScreenProps> = ({ onComplete, 
                 <Ruler className="w-3.5 h-3.5 text-teal-400" />
                 <span>Length</span>
               </div>
-              <div className="flex items-center space-x-1.5">
-                <input
-                  type="number"
-                  step="0.1"
-                  min="16"
-                  max="24"
-                  value={lengthInches}
-                  onChange={(e) => setLengthInches(parseFloat(e.target.value) || 20)}
-                  className="w-20 px-2 py-1.5 rounded-lg bg-stone-900 border border-stone-700 text-stone-100 text-xs text-center font-mono"
-                />
-                <span className="text-xs text-stone-400">inches</span>
-              </div>
+              {metric ? (
+                <div className="flex items-center space-x-1.5">
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="40"
+                    max="60"
+                    value={lengthCm}
+                    onChange={(e) => setLengthCm(parseFloat(e.target.value) || 50)}
+                    className="w-20 px-2 py-1.5 rounded-lg bg-stone-900 border border-stone-700 text-stone-100 text-xs text-center font-mono"
+                  />
+                  <span className="text-xs text-stone-400">cm</span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-1.5">
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="16"
+                    max="24"
+                    value={lengthInches}
+                    onChange={(e) => setLengthInches(parseFloat(e.target.value) || 20)}
+                    className="w-20 px-2 py-1.5 rounded-lg bg-stone-900 border border-stone-700 text-stone-100 text-xs text-center font-mono"
+                  />
+                  <span className="text-xs text-stone-400">in</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Temperament Selector */}
+        {/* Temperament: every baby is different. Chosen for you; can be overridden. */}
         <div className="space-y-2.5">
-          <label className="text-xs font-semibold text-stone-300 block">
-            Newborn Temperament Archetype
-          </label>
-          <div className="space-y-2">
-            {(Object.keys(TEMPERAMENTS) as TemperamentType[]).map((tKey) => {
-              const t = TEMPERAMENTS[tKey];
-              const isSelected = temperament === tKey;
-
-              return (
-                <button
-                  key={tKey}
-                  type="button"
-                  onClick={() => setTemperament(tKey)}
-                  className={`w-full p-3 rounded-2xl border text-left transition-all ${
-                    isSelected
-                      ? 'bg-teal-950/70 border-teal-500 ring-1 ring-teal-500/50 text-stone-100'
-                      : 'bg-stone-800/40 border-stone-700/50 text-stone-400 hover:bg-stone-800/70'
-                  }`}
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-stone-100">{t.label}</span>
-                    <span className="text-[10px] font-mono uppercase text-teal-400 px-1.5 py-0.5 rounded bg-teal-950/80 border border-teal-800">
-                      Cry: {t.cryIntensity}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-stone-400 mt-1 leading-normal">
-                    {t.description}
-                  </p>
-                </button>
-              );
-            })}
+          <div className="p-3.5 rounded-2xl bg-stone-800/40 border border-stone-700/60 text-xs text-stone-300 leading-relaxed">
+            <span className="font-semibold text-stone-100 block mb-0.5">Every baby is different</span>
+            You won't know {name.trim() || 'your baby'}'s temperament in advance — just like real life. You'll learn it by caring for them.
+            <button
+              type="button"
+              onClick={() => setShowTemperament(v => !v)}
+              className="block mt-2 text-[11px] text-teal-400 hover:text-teal-300 underline underline-offset-2"
+            >
+              {showTemperament ? 'Hide advanced option' : 'Advanced: choose temperament manually'}
+            </button>
           </div>
+
+          {showTemperament && (
+            <div className="space-y-2">
+              {TEMPERAMENT_KEYS.map((tKey) => {
+                const t = TEMPERAMENTS[tKey];
+                const isSelected = temperament === tKey;
+                return (
+                  <button
+                    key={tKey}
+                    type="button"
+                    onClick={() => setTemperament(tKey)}
+                    className={`w-full p-3 rounded-2xl border text-left transition-all ${
+                      isSelected
+                        ? 'bg-teal-950/70 border-teal-500 ring-1 ring-teal-500/50 text-stone-100'
+                        : 'bg-stone-800/40 border-stone-700/50 text-stone-400 hover:bg-stone-800/70'
+                    }`}
+                  >
+                    <span className="text-xs font-bold text-stone-100">{t.label}</span>
+                    <p className="text-[11px] text-stone-400 mt-1 leading-normal">{t.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -191,7 +233,7 @@ export const CreateBabyScreen: React.FC<CreateBabyScreenProps> = ({ onComplete, 
           className="w-full py-3.5 px-6 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-sm transition-all flex items-center justify-center space-x-2 shadow-lg shadow-teal-950/50"
         >
           <Sparkles className="w-4 h-4" />
-          <span>Launch Parenthood Simulation</span>
+          <span>Meet {name.trim() || 'your baby'}</span>
         </button>
       </div>
     </form>

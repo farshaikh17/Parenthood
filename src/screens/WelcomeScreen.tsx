@@ -17,7 +17,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStart }) => {
       <div className="pt-4 text-center space-y-2">
         <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-teal-950/70 border border-teal-800/60 text-teal-300 text-xs font-medium">
           <Sparkles className="w-3.5 h-3.5" />
-          <span>Realistic Parenting Simulation</span>
+          <span>An educational simulation</span>
         </div>
         <h1 className="text-3xl font-bold tracking-tight text-stone-100 pt-2">
           Parenthood
@@ -34,9 +34,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStart }) => {
             <HeartHandshake className="w-4 h-4" />
           </div>
           <div className="text-xs space-y-0.5">
-            <h2 className="font-semibold text-stone-200 text-xs">Continuous Simulated Life</h2>
+            <h2 className="font-semibold text-stone-200 text-xs">A baby that keeps going</h2>
             <p className="text-stone-400 leading-relaxed">
-              Not a casual game. Experience the uninterrupted rhythm, wake windows, hunger cycles, and soothing demands of a simulated newborn.
+              Not a game. The baby lives on the simulation's clock — even while the app is closed — and needs feeding, changing, settling and you.
             </p>
           </div>
         </div>
@@ -46,9 +46,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStart }) => {
             <Clock className="w-4 h-4" />
           </div>
           <div className="text-xs space-y-0.5">
-            <h2 className="font-semibold text-stone-200 text-xs">Parent Fatigue & Reality</h2>
+            <h2 className="font-semibold text-stone-200 text-xs">It costs you something too</h2>
             <p className="text-stone-400 leading-relaxed">
-              Experience the emotional weight, sleep debt, stress management, and profound reward of responsive caregiving.
+              Broken sleep, stress, confidence, and — in a two-parent household — how the load is shared all count.
             </p>
           </div>
         </div>
@@ -58,9 +58,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStart }) => {
             <Shield className="w-4 h-4" />
           </div>
           <div className="text-xs space-y-0.5">
-            <h2 className="font-semibold text-stone-200 text-xs">Evidence-Based Pediatric Science</h2>
+            <h2 className="font-semibold text-stone-200 text-xs">You'll have to work it out</h2>
             <p className="text-stone-400 leading-relaxed">
-              Understand the biological reasons behind crying, cluster feeding, Moro startles, and secure emotional bonding.
+              The baby won't tell you what's wrong. Reading the signs, getting it wrong sometimes, and learning is the point.
             </p>
           </div>
         </div>
@@ -72,11 +72,11 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStart }) => {
           onClick={onStart}
           className="w-full py-3.5 px-6 rounded-2xl bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-semibold text-sm transition-all shadow-lg shadow-teal-950/50 flex items-center justify-center space-x-2"
         >
-          <span>Begin Parenting Journey</span>
+          <span>Begin</span>
           <ArrowRight className="w-4 h-4" />
         </button>
         <p className="text-center text-[10px] text-stone-500">
-          Designed for prospective parents, couples, and curious adults.
+          Parenthood is an educational simulation, not medical advice or a substitute for professional guidance.
         </p>
       </div>
     </div>

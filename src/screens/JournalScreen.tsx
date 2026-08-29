@@ -4,7 +4,9 @@
  */
 
 import React, { useState } from 'react';
-import { Baby, CareActionRecord, JournalEntry, Milestone, Parent, SimulationEvent } from '../types';
+import { Baby, CareActionRecord, DayLog, JournalEntry, Milestone, Parent, SimulationEvent } from '../types';
+import { getDayLog, summarizeDay } from '../simulation/dayLog';
+import { MILESTONE_NOTES } from '../content/copy';
 import { 
   BookOpen, 
   Sparkles, 
@@ -16,7 +18,6 @@ import {
   Send,
   Loader2
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
 
 interface JournalScreenProps {
   baby: Baby;
@@ -25,6 +26,7 @@ interface JournalScreenProps {
   journalEntries: JournalEntry[];
   recentEvents: SimulationEvent[];
   actionRecords: CareActionRecord[];
+  dayLogs: DayLog[];
   simulatedTimeMs: number;
   onAddJournalEntry: (entry: JournalEntry) => void;
 }
@@ -36,6 +38,7 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
   journalEntries,
   recentEvents,
   actionRecords,
+  dayLogs,
   simulatedTimeMs,
   onAddJournalEntry
 }) => {
@@ -47,6 +50,21 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
 
   const handleGenerateReflection = async () => {
     setIsGeneratingAI(true);
+    const todayLog = getDayLog(dayLogs, ageDays);
+    const stats = summarizeDay(todayLog);
+    const dayStart = baby.birthTimestamp + ageDays * 86400000;
+    const dayEnd = dayStart + 86400000;
+    // Structured, truthful day log for the AI — it may only narrate what is in here.
+    const todaysEvents = recentEvents
+      .filter(e => e.timestamp >= dayStart && e.timestamp < dayEnd)
+      .map(e => ({ time: new Date(e.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), type: e.type, title: e.title, resolved: e.resolved }));
+    const todaysActions = actionRecords
+      .filter(a => a.timestamp >= dayStart && a.timestamp < dayEnd)
+      .map(a => ({ time: new Date(a.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), action: a.actionType, by: a.source === 'autopilot' ? 'autopilot' : (parents.find(p => p.id === a.performedByParentId)?.name || 'parent'), result: a.effectiveness }));
+    const milestonesToday = milestones.filter(m => m.unlocked && m.unlockedAtTimestamp && m.unlockedAtTimestamp >= dayStart && m.unlockedAtTimestamp < dayEnd).map(m => m.title);
+
+    let reflection = '';
+    let insight = '';
     try {
       const response = await fetch('/api/gemini/journal-reflection', {
         method: 'POST',
@@ -55,41 +73,44 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
           babyName: baby.name,
           ageDays,
           temperament: baby.temperament,
-          recentEvents: recentEvents.slice(-5).map(e => e.title),
-          parentStress: parents[0]?.stressLevel || 30,
-          parentingConfidence: parents[0]?.confidence || 60
+          caregivers: parents.map(p => p.name),
+          dayStats: stats,
+          events: todaysEvents.slice(0, 40),
+          actions: todaysActions.slice(0, 60),
+          milestonesToday,
+          parentNote: parentNote.trim() || undefined
         })
       });
-
       const data = await response.json();
-
-      const newEntry: JournalEntry = {
-        id: `journal_${Date.now()}`,
-        dayNumber: ageDays,
-        simDateString: new Date(simulatedTimeMs).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
-        title: `Day ${ageDays}: Daily Caregiving Reflection`,
-        summary: `Reflecting on ${baby.name}'s feeding rhythms and care moments.`,
-        reflection: data.reflection || `Today was filled with attentive care. Every responsive moment shapes ${baby.name}'s sense of safety.`,
-        educationalInsight: data.milestoneInsight || 'Responsive caregiving builds secure attachment neural pathways in young infants.',
-        parentNotes: parentNote.trim() || undefined,
-        stats: {
-          feedsCount: actionRecords.filter(a => a.actionType === 'feed').length,
-          diapersCount: actionRecords.filter(a => a.actionType === 'change_diaper').length,
-          sleepHoursTotal: parseFloat((ageDays * 14.5).toFixed(1)),
-          cryingMinutesTotal: 45,
-          avgParentStress: Math.round(parents[0]?.stressLevel || 30)
-        },
-        milestonesEarned: milestones.filter(m => m.unlocked).map(m => m.title)
-      };
-
-      onAddJournalEntry(newEntry);
-      setParentNote('');
-      confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
+      reflection = data.reflection || '';
+      insight = data.milestoneInsight || '';
     } catch (err) {
       console.error('Failed to generate journal:', err);
-    } finally {
-      setIsGeneratingAI(false);
     }
+
+    // Offline / failure fallback is built ONLY from real counters
+    if (!reflection) {
+      reflection = `Day ${ageDays}: ${stats.feedsCount} feed${stats.feedsCount === 1 ? '' : 's'}, ${stats.diapersCount} nappy change${stats.diapersCount === 1 ? '' : 's'}, about ${stats.sleepHoursTotal} hours of sleep and ${stats.cryingMinutesTotal} minutes of crying so far.` +
+        (todayLog.nightWakings > 0 ? ` ${todayLog.nightWakings} night waking${todayLog.nightWakings === 1 ? '' : 's'}.` : '') +
+        (todayLog.autopilotActions > 0 ? ` ${todayLog.autopilotActions} of the care actions happened while you were away.` : '');
+    }
+
+    const newEntry: JournalEntry = {
+      id: `journal_${Date.now()}`,
+      dayNumber: ageDays,
+      simDateString: new Date(simulatedTimeMs).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
+      title: `Day ${ageDays}`,
+      summary: `${stats.feedsCount} feeds • ${stats.diapersCount} changes • ${stats.sleepHoursTotal}h sleep • ${stats.cryingMinutesTotal} min crying`,
+      reflection,
+      educationalInsight: insight,
+      parentNotes: parentNote.trim() || undefined,
+      stats,
+      milestonesEarned: milestonesToday
+    };
+
+    onAddJournalEntry(newEntry);
+    setParentNote('');
+    setIsGeneratingAI(false);
   };
 
   const unlockedCount = milestones.filter(m => m.unlocked).length;
@@ -100,7 +121,7 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
       {/* Top Banner */}
       <div className="p-4 rounded-3xl bg-gradient-to-r from-stone-800/80 to-stone-900/90 border border-stone-700/60 shadow-lg flex items-center justify-between">
         <div>
-          <span className="text-[10px] uppercase font-bold text-teal-400 font-mono">Memories & Development</span>
+          <span className="text-[10px] uppercase font-bold text-teal-400 font-mono">Journal</span>
           <h2 className="text-base font-bold text-stone-100 mt-0.5">{baby.name}'s Story</h2>
           <p className="text-xs text-stone-400">
             Milestones: <span className="text-teal-300 font-medium">{unlockedCount} of {milestones.length} Unlocked</span>
@@ -143,7 +164,7 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
               <h3 className="text-xs font-bold text-teal-200">Generate Day {ageDays} Reflection</h3>
             </div>
             <p className="text-[11px] text-stone-300 leading-relaxed">
-              Synthesize your caregiving actions, soothing interventions, and emotional moments into an observational parenting memory.
+              Writes a short entry from what actually happened today — feeds, changes, sleep, crying and your actions. Nothing is invented.
             </p>
 
             <textarea
@@ -162,12 +183,12 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
               {isGeneratingAI ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Synthesizing Reflection...</span>
+                  <span>Writing...</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Log Day {ageDays} Journal Entry</span>
+                  <span>Write today's entry</span>
                 </>
               )}
             </button>
@@ -177,7 +198,7 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
           <div className="space-y-3">
             {journalEntries.length === 0 ? (
               <div className="p-6 text-center text-stone-500 text-xs rounded-2xl border border-dashed border-stone-800">
-                No journal entries yet. Tap "Log Day {ageDays} Journal Entry" above to create your first milestone memory.
+                No entries yet. Tap "Write today's entry" to record how today went.
               </div>
             ) : (
               journalEntries.map((entry) => (
@@ -190,6 +211,7 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
                     <span className="text-[10px] text-stone-500 font-mono">{entry.simDateString}</span>
                   </div>
 
+                  <p className="text-[10px] text-stone-500 font-mono">{entry.summary}</p>
                   <p className="text-xs text-stone-300 leading-relaxed italic bg-stone-900/60 p-3 rounded-xl border border-stone-800">
                     "{entry.reflection}"
                   </p>
@@ -203,7 +225,7 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
 
                   {entry.educationalInsight && (
                     <div className="text-[10px] text-stone-400 bg-teal-950/40 border border-teal-900/60 p-2 rounded-lg">
-                      <strong className="text-teal-300">Pediatric Science: </strong>
+                      <strong className="text-teal-300">Note: </strong>
                       {entry.educationalInsight}
                     </div>
                   )}
@@ -247,8 +269,7 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
                 </p>
 
                 <div className="pl-6 text-[10px] text-stone-400">
-                  <span className="text-teal-400 font-medium">Science Insight: </span>
-                  {m.educationalInsight}
+                  {MILESTONE_NOTES[m.id] || m.educationalInsight}
                 </div>
               </div>
             );

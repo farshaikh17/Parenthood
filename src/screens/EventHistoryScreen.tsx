@@ -62,7 +62,7 @@ export const EventHistoryScreen: React.FC<EventHistoryScreenProps> = ({
       timestamp: a.timestamp,
       itemType: 'action' as const,
       eventType: undefined,
-      title: `Care Action: ${a.actionType.replace('_', ' ')}`,
+      title: a.source === 'autopilot' ? `While away: ${a.actionType.replace(/_/g, ' ')}` : `You: ${a.actionType.replace(/_/g, ' ')}`,
       description: a.details,
       educationalNote: undefined,
       severity: 'info' as const,
@@ -77,10 +77,10 @@ export const EventHistoryScreen: React.FC<EventHistoryScreenProps> = ({
       {/* Top Banner */}
       <div className="p-4 rounded-3xl bg-gradient-to-r from-stone-800/80 to-stone-900/90 border border-stone-700/60 shadow-lg flex items-center justify-between">
         <div>
-          <span className="text-[10px] uppercase font-bold text-teal-400 font-mono">Caregiving Timeline</span>
-          <h2 className="text-base font-bold text-stone-100 mt-0.5">Events & Interventions</h2>
+          <span className="text-[10px] uppercase font-bold text-teal-400 font-mono">Timeline</span>
+          <h2 className="text-base font-bold text-stone-100 mt-0.5">What happened</h2>
           <p className="text-xs text-stone-400">
-            Total Logged Events: {combinedTimeline.length}
+            Entries: {combinedTimeline.length}
           </p>
         </div>
 
@@ -161,7 +161,7 @@ export const EventHistoryScreen: React.FC<EventHistoryScreenProps> = ({
 
                   {item.educationalNote && (
                     <div className="p-2.5 rounded-xl bg-stone-950/60 border border-stone-800/80 text-[10px] text-stone-400 leading-normal">
-                      <span className="text-teal-400 font-semibold">Pediatric Context: </span>
+                      <span className="text-teal-400 font-semibold">Why: </span>
                       {item.educationalNote}
                     </div>
                   )}

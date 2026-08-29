@@ -35,7 +35,8 @@ import {
   Utensils
 } from 'lucide-react';
 import { soundFx } from '../utils/audio';
-import { getDevelopmentalStage } from '../simulation/engine';
+import { getDevelopmentalStage, isNighttimeHour } from '../simulation/engine';
+import { formatLength, formatWeight } from '../utils/units';
 
 interface DashboardScreenProps {
   baby: Baby;
@@ -71,10 +72,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const stage = getDevelopmentalStage(ageDays);
   const simDate = new Date(settings.simulatedTimeMs);
   const timeString = simDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const isNight = simDate.getHours() >= 22 || simDate.getHours() < 7;
+  const isNight = isNighttimeHour(simDate.getHours(), settings);
 
   // Active unaddressed warnings or emergencies
   const activeUnresolvedEvent = recentEvents.find(e => !e.resolved);
+  const awaySummary = recentEvents.length > 0 && recentEvents[0].type === 'away_summary' ? recentEvents[0] : null;
 
   // Time calculations
   const minutesSinceFeed = Math.floor((settings.simulatedTimeMs - babyState.lastFedTimestamp) / (60 * 1000));
@@ -88,21 +90,21 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           label: 'Sleeping Soundly',
           color: 'bg-indigo-950/80 text-indigo-300 border-indigo-800',
           avatarEmoji: '😴',
-          desc: 'Resting peacefully. Brain forming memory synaptogenesis.'
+          desc: 'Resting peacefully.'
         };
       case 'sleeping_light':
         return {
           label: 'Light Sleep / Stirring',
           color: 'bg-indigo-900/60 text-indigo-200 border-indigo-700',
           avatarEmoji: '😪',
-          desc: 'REM active sleep. Facial twitches and mild whimpers.'
+          desc: 'Stirring now and then. Small twitches and whimpers.'
         };
       case 'drowsy':
         return {
           label: 'Drowsy & Heavy-Eyed',
           color: 'bg-purple-950/80 text-purple-300 border-purple-800',
           avatarEmoji: '🥱',
-          desc: 'Ideal window to swaddle and lay down in crib.'
+          desc: 'Eyes heavy. A good moment to try for sleep.'
         };
       case 'playful':
       case 'quiet_alert':
@@ -110,28 +112,28 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           label: babyState.mood === 'playful' ? 'Playful & Cooing' : 'Quiet & Alert',
           color: 'bg-emerald-950/80 text-emerald-300 border-emerald-800',
           avatarEmoji: '👶',
-          desc: 'Observing faces and high contrast shapes with calm curiosity.'
+          desc: 'Looking around, calm and curious.'
         };
       case 'fussy':
         return {
           label: 'Fussy & Squirming',
           color: 'bg-amber-950/80 text-amber-300 border-amber-800',
           avatarEmoji: '🥺',
-          desc: 'Showing early hunger or gas cues. Needs parental attention.'
+          desc: 'Squirming and grizzling. Something is starting to bother them.'
         };
       case 'active_crying':
         return {
           label: 'Active Crying',
           color: 'bg-rose-950/90 text-rose-200 border-rose-800 shadow-md shadow-rose-950/50',
           avatarEmoji: '😭',
-          desc: 'Distressed communication. Checking hunger, burp, or diaper.'
+          desc: 'Crying hard. You will have to work out why.'
         };
       case 'inconsolable':
         return {
           label: 'Inconsolable / Overstimulated',
           color: 'bg-red-950 text-red-200 border-red-700 animate-pulse',
           avatarEmoji: '😫',
-          desc: 'Severe over-tiredness or trapped gas. Requires gentle rocking and calm darkness.'
+          desc: 'Beyond settling easily. Slow down, hold them, and work through the basics.'
         };
       default:
         return {
@@ -197,6 +199,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </div>
       )}
 
+      {/* While-you-were-away summary (shown until another event arrives) */}
+      {awaySummary && (
+        <div className="p-3.5 rounded-2xl bg-stone-800/60 border border-stone-700 text-stone-200 space-y-1">
+          <div className="flex items-center space-x-2">
+            <Clock className="w-4 h-4 text-teal-400 shrink-0" />
+            <span className="font-bold text-xs">{awaySummary.title}</span>
+          </div>
+          <p className="text-[11px] text-stone-300 leading-relaxed">{awaySummary.description}</p>
+        </div>
+      )}
+
       {/* Main Baby Hero Card */}
       <div className="p-5 rounded-3xl bg-gradient-to-b from-stone-800/70 to-stone-900/90 border border-stone-700/60 shadow-xl space-y-4 relative overflow-hidden">
         <div className="flex items-start justify-between">
@@ -217,7 +230,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               </span>
             </div>
             <p className="text-xs text-stone-400 mt-0.5">
-              Weight: {baby.currentWeightLbs} lbs • Length: {baby.currentLengthInches} in
+              {formatWeight(baby.currentWeightGrams, settings.unitSystem)} • {formatLength(baby.currentLengthCm, settings.unitSystem)}
             </p>
           </div>
 
@@ -329,7 +342,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               />
             </div>
             <span className="text-[10px] text-stone-500 block">
-              {babyState.gasDiscomfort > 50 ? `Gas: ${Math.round(babyState.gasDiscomfort)}%` : 'Settled & Soothed'}
+              {babyState.comfort > 60 ? 'Settled' : babyState.comfort > 30 ? 'Unsettled' : 'Distressed'}
             </span>
           </div>
 
@@ -341,7 +354,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <div className="flex justify-between items-center text-xs">
               <span className="text-stone-300 flex items-center space-x-1 font-medium">
                 <Sparkles className="w-3 h-3 text-teal-400" />
-                <span>Diaper</span>
+                <span>Nappy</span>
               </span>
               <span className={`font-mono font-bold text-[10px] uppercase ${
                 babyState.diaperType === 'clean' ? 'text-emerald-400' : 'text-rose-400'
@@ -376,7 +389,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </span>
         </div>
 
-        <div className={`grid ${stage === 'infant_4_6mo' ? 'grid-cols-4 sm:grid-cols-4' : 'grid-cols-3'} gap-2`}>
+        <div className={`grid ${stage === 'infant_4_6mo' ? 'grid-cols-4' : 'grid-cols-4'} gap-2`}>
           
           <button
             onClick={() => onOpenActionModal('feed')}
@@ -417,7 +430,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <div className="p-2 rounded-xl bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 group-hover:scale-110 transition-transform">
               <Sparkles className="w-4 h-4" />
             </div>
-            <span className="text-xs font-semibold">Diaper</span>
+            <span className="text-xs font-semibold">Nappy</span>
           </button>
 
           <button
@@ -438,6 +451,16 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               <Moon className="w-4 h-4" />
             </div>
             <span className="text-xs font-semibold">Sleep</span>
+          </button>
+
+          <button
+            onClick={() => onOpenActionModal('observe')}
+            className="p-3 rounded-2xl bg-stone-800/70 hover:bg-teal-950/50 border border-stone-700/60 hover:border-teal-700 text-stone-200 flex flex-col items-center justify-center space-y-1.5 transition-all shadow-sm group"
+          >
+            <div className="p-2 rounded-xl bg-teal-950/80 text-teal-300 border border-teal-800/60 group-hover:scale-110 transition-transform">
+              <Info className="w-4 h-4" />
+            </div>
+            <span className="text-xs font-semibold">Look</span>
           </button>
 
           <button
@@ -467,7 +490,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               {activeParent.name}'s Stress: <span className="text-teal-300">{Math.round(activeParent.stressLevel)}%</span> • Sleep Debt: <span className="text-amber-300">{activeParent.sleepDebtHours}h</span>
             </p>
             <p className="text-[10px] text-stone-400">
-              Parenting Confidence: {Math.round(activeParent.confidence)}% • Energy: {Math.round(activeParent.energy)}%
+              Confidence: {Math.round(activeParent.confidence)}% • Energy: {Math.round(activeParent.energy)}%
             </p>
           </div>
         </div>

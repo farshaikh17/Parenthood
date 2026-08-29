@@ -4,7 +4,8 @@
  */
 
 import React from 'react';
-import { Baby, BabyState, ScoreReport } from '../types';
+import { Baby, BabyState, ScoreReport, UnitSystem } from '../types';
+import { formatLength, formatWeight, formatWeightDelta } from '../utils/units';
 import { 
   Droplet, 
   Moon, 
@@ -18,7 +19,7 @@ import {
   Utensils
 } from 'lucide-react';
 import { EducationalCard } from '../components/EducationalCard';
-import { EDUCATIONAL_TOPICS } from '../simulation/initialData';
+import { EDUCATIONAL_TOPICS } from '../content/copy';
 import { getDevelopmentalStage } from '../simulation/engine';
 
 interface NeedsStatusScreenProps {
@@ -26,6 +27,7 @@ interface NeedsStatusScreenProps {
   babyState: BabyState;
   scoreReport: ScoreReport;
   simulatedTimeMs: number;
+  unitSystem: UnitSystem;
   onOpenAction: (actionType: string) => void;
 }
 
@@ -34,6 +36,7 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
   babyState,
   scoreReport,
   simulatedTimeMs,
+  unitSystem,
   onOpenAction
 }) => {
   const ageDays = Math.max(0, Math.floor((simulatedTimeMs - baby.birthTimestamp) / (24 * 60 * 60 * 1000)));
@@ -45,10 +48,10 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
       {/* Top Score Banner */}
       <div className="p-4 rounded-3xl bg-gradient-to-r from-stone-800/80 to-stone-900/90 border border-stone-700/60 shadow-lg flex items-center justify-between">
         <div>
-          <span className="text-[10px] uppercase font-bold text-teal-400 font-mono">Physiological Status</span>
-          <h2 className="text-base font-bold text-stone-100 mt-0.5">{baby.name}'s Biology & Health</h2>
+          <span className="text-[10px] uppercase font-bold text-teal-400 font-mono">Needs</span>
+          <h2 className="text-base font-bold text-stone-100 mt-0.5">What {baby.name} needs right now</h2>
           <p className="text-xs text-stone-400">
-            Current Condition: <span className="text-emerald-400 font-medium capitalize">{babyState.healthState.replace('_', ' ')}</span>
+            These are the simulation's own values. They are not medical measurements.
           </p>
         </div>
 
@@ -61,7 +64,7 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
       {/* Deep-Dive Biological Need Gauges */}
       <div className="space-y-3">
         <span className="text-xs font-bold text-stone-300 uppercase tracking-wide">
-          Core Biological Drivers
+          Needs
         </span>
 
         {/* 1. Hunger & Nutrition */}
@@ -72,8 +75,8 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
                 <Droplet className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-xs font-bold text-stone-200">Hunger & Gastric Fullness</span>
-                <span className="text-[10px] text-stone-400 block">Digestion rate: ~2.5 hours per feed</span>
+                <span className="text-xs font-bold text-stone-200">Hunger</span>
+                <span className="text-[10px] text-stone-400 block">Rises faster or slower depending on the baby and the day</span>
               </div>
             </div>
             <span className="text-xs font-mono font-bold text-amber-300">{Math.round(babyState.hunger)}%</span>
@@ -90,13 +93,13 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
 
           <div className="flex justify-between items-center pt-1 text-[11px]">
             <span className="text-stone-400">
-              {babyState.hunger > 60 ? '🍼 Cueing for nourishment' : 'Content & satisfied'}
+              {babyState.hunger > 60 ? 'Rooting, sucking on hands' : babyState.hunger > 35 ? 'Could take a feed soon' : 'Recently fed'}
             </span>
             <button
               onClick={() => onOpenAction('feed')}
               className="text-xs px-2.5 py-1 rounded-lg bg-amber-900/60 text-amber-200 border border-amber-700 hover:bg-amber-800"
             >
-              Feed Milk
+              Feed
             </button>
           </div>
         </div>
@@ -110,8 +113,8 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
                   <Utensils className="w-4 h-4" />
                 </div>
                 <div>
-                  <span className="text-xs font-bold text-stone-200">Complementary Solids Appetite</span>
-                  <span className="text-[10px] text-stone-400 block">Purees & textured foods (alongside milk)</span>
+                  <span className="text-xs font-bold text-stone-200">Interest in solids</span>
+                  <span className="text-[10px] text-stone-400 block">Small tastes alongside milk (4–6 month stage)</span>
                 </div>
               </div>
               <span className="text-xs font-mono font-bold text-orange-300">{Math.round(babyState.solidFoodHunger || 0)}%</span>
@@ -128,7 +131,7 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
 
             <div className="flex justify-between items-center pt-1 text-[11px]">
               <span className="text-stone-400">
-                {(babyState.solidFoodHunger || 0) > 60 ? '🥄 Curious & receptive to solids' : 'Appetite satisfied'}
+                {(babyState.solidFoodHunger || 0) > 60 ? 'Watching you eat with interest' : 'Not interested right now'}
               </span>
               <button
                 onClick={() => onOpenAction('feed_solids')}
@@ -148,7 +151,7 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
                 <Moon className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-xs font-bold text-stone-200">Sleepiness & Wake Window</span>
+                <span className="text-xs font-bold text-stone-200">Tiredness</span>
                 <span className="text-[10px] text-stone-400 block">
                   {babyState.isSleeping ? `Sleeping (${Math.floor(babyState.sleepMinutesElapsed)} min)` : `Awake (${Math.floor(babyState.awakeMinutesElapsed)} min)`}
                 </span>
@@ -168,13 +171,13 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
 
           <div className="flex justify-between items-center pt-1 text-[11px]">
             <span className="text-stone-400">
-              {babyState.sleepiness > 75 && !babyState.isSleeping ? '⚠️ Risk of over-tiredness' : 'Healthy sleep schedule'}
+              {babyState.sleepiness > 75 && !babyState.isSleeping ? 'Over-tired and fighting sleep' : babyState.isSleeping ? 'Asleep' : 'Comfortably awake'}
             </span>
             <button
               onClick={() => onOpenAction(babyState.isSleeping ? 'cuddle' : 'put_to_sleep')}
               className="text-xs px-2.5 py-1 rounded-lg bg-indigo-900/60 text-indigo-200 border border-indigo-700 hover:bg-indigo-800"
             >
-              {babyState.isSleeping ? 'Check' : 'Sleep Routine'}
+              {babyState.isSleeping ? 'Hold' : 'Put down'}
             </button>
           </div>
         </div>
@@ -187,8 +190,8 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
                 <Heart className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-xs font-bold text-stone-200">Sensory Comfort & Attachment</span>
-                <span className="text-[10px] text-stone-400 block">Gas level: {Math.round(babyState.gasDiscomfort)}%</span>
+                <span className="text-xs font-bold text-stone-200">Comfort</span>
+                <span className="text-[10px] text-stone-400 block">Drops with hunger, a wet nappy, wind, or being awake too long</span>
               </div>
             </div>
             <span className="text-xs font-mono font-bold text-rose-300">{Math.round(babyState.comfort)}%</span>
@@ -203,7 +206,7 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
 
           <div className="flex justify-between items-center pt-1 text-[11px]">
             <span className="text-stone-400">
-              {babyState.gasDiscomfort > 50 ? 'Trapped gas detected' : 'Comfortable & secure'}
+              {babyState.gasDiscomfort > 50 ? 'Squirming, pulling legs up' : babyState.diaperSoiled > 50 ? 'Nappy needs checking' : babyState.comfort > 60 ? 'Settled' : 'Unsettled'}
             </span>
             <div className="flex space-x-1.5">
               <button
@@ -226,7 +229,8 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
 
       {/* Growth & Development Tracking */}
       <div className="p-4 rounded-2xl bg-stone-800/40 border border-stone-700/60 space-y-3">
-        <span className="text-xs font-bold text-stone-200 block">Physical Growth Curve</span>
+        <span className="text-xs font-bold text-stone-200 block">Growth</span>
+        <p className="text-[10px] text-stone-500">A smooth simulated curve, not a real growth chart.</p>
         
         <div className="grid grid-cols-2 gap-3">
           <div className="p-3 rounded-xl bg-stone-900 border border-stone-800 text-xs">
@@ -234,8 +238,8 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
               <Scale className="w-3.5 h-3.5 text-teal-400" />
               <span>Weight</span>
             </div>
-            <p className="text-base font-bold text-stone-100 font-mono">{baby.currentWeightLbs} lbs</p>
-            <p className="text-[10px] text-stone-500">Birth: {baby.birthWeightLbs} lbs (+{Math.max(0, parseFloat((baby.currentWeightLbs - baby.birthWeightLbs).toFixed(2)))} lbs)</p>
+            <p className="text-base font-bold text-stone-100 font-mono">{formatWeight(baby.currentWeightGrams, unitSystem)}</p>
+            <p className="text-[10px] text-stone-500">Birth: {formatWeight(baby.birthWeightGrams, unitSystem)} ({formatWeightDelta(baby.currentWeightGrams - baby.birthWeightGrams, unitSystem)})</p>
           </div>
 
           <div className="p-3 rounded-xl bg-stone-900 border border-stone-800 text-xs">
@@ -243,18 +247,14 @@ export const NeedsStatusScreen: React.FC<NeedsStatusScreenProps> = ({
               <Ruler className="w-3.5 h-3.5 text-teal-400" />
               <span>Length</span>
             </div>
-            <p className="text-base font-bold text-stone-100 font-mono">{baby.currentLengthInches} in</p>
-            <p className="text-[10px] text-stone-500">Birth: {baby.birthLengthInches} in</p>
+            <p className="text-base font-bold text-stone-100 font-mono">{formatLength(baby.currentLengthCm, unitSystem)}</p>
+            <p className="text-[10px] text-stone-500">Birth: {formatLength(baby.birthLengthCm, unitSystem)}</p>
           </div>
         </div>
       </div>
 
       {/* Educational Insight Card */}
-      <EducationalCard
-        title={EDUCATIONAL_TOPICS[1].title}
-        summary={EDUCATIONAL_TOPICS[1].summary}
-        content={EDUCATIONAL_TOPICS[1].content}
-      />
+      <EducationalCard item={EDUCATIONAL_TOPICS[1]} />
 
     </div>
   );
