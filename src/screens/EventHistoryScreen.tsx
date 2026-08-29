@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState } from 'react';
+import { explainEvent, ExplainResult } from '../ai/client';
 import { CareActionRecord, SimulationEvent } from '../types';
 import { 
   History, 
@@ -31,6 +32,17 @@ export const EventHistoryScreen: React.FC<EventHistoryScreenProps> = ({
   actions,
   onResolveEvent
 }) => {
+  const [openWhy, setOpenWhy] = useState<Record<string, boolean>>({});
+  const [explanations, setExplanations] = useState<Record<string, ExplainResult | 'loading'>>({});
+
+  const askWhy = async (id: string) => {
+    const ev = events.find(e => e.id === id);
+    if (!ev || explanations[id]) return;
+    setExplanations(prev => ({ ...prev, [id]: 'loading' }));
+    const result = await explainEvent(ev);
+    setExplanations(prev => ({ ...prev, [id]: result }));
+  };
+
   const getActionIcon = (actionType: string) => {
     switch (actionType) {
       case 'feed': return <Droplet className="w-3.5 h-3.5 text-amber-400" />;
@@ -55,7 +67,8 @@ export const EventHistoryScreen: React.FC<EventHistoryScreenProps> = ({
       description: e.description,
       educationalNote: e.educationalNote,
       severity: e.severity,
-      resolved: e.resolved
+      resolved: e.resolved,
+      hasSnapshot: !!e.snapshot
     })),
     ...actions.map(a => ({
       id: a.id,
@@ -67,7 +80,8 @@ export const EventHistoryScreen: React.FC<EventHistoryScreenProps> = ({
       educationalNote: undefined,
       severity: 'info' as const,
       resolved: true,
-      actionType: a.actionType
+      actionType: a.actionType,
+      hasSnapshot: false
     }))
   ].sort((a, b) => b.timestamp - a.timestamp);
 
@@ -159,10 +173,37 @@ export const EventHistoryScreen: React.FC<EventHistoryScreenProps> = ({
 
                   <p className="text-xs text-stone-300 leading-relaxed">{item.description}</p>
 
+                  {/* "Why did this happen?" — static simulation note first, optional grounded AI explanation on request */}
                   {item.educationalNote && (
-                    <div className="p-2.5 rounded-xl bg-stone-950/60 border border-stone-800/80 text-[10px] text-stone-400 leading-normal">
-                      <span className="text-teal-400 font-semibold">Why: </span>
-                      {item.educationalNote}
+                    <div className="space-y-1.5">
+                      <button
+                        onClick={() => setOpenWhy(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                        className="text-[11px] text-teal-400 hover:text-teal-300 underline underline-offset-2"
+                      >
+                        {openWhy[item.id] ? 'Hide' : 'Why did this happen?'}
+                      </button>
+                      {openWhy[item.id] && (
+                        <div className="p-2.5 rounded-xl bg-stone-950/60 border border-stone-800/80 text-[10px] text-stone-400 leading-normal space-y-2">
+                          <p>{item.educationalNote}</p>
+                          {item.hasSnapshot && !explanations[item.id] && (
+                            <button
+                              onClick={() => askWhy(item.id)}
+                              className="text-[10px] px-2 py-1 rounded-lg bg-stone-800 border border-stone-700 text-stone-200 hover:bg-stone-700"
+                            >
+                              What was going on at that moment?
+                            </button>
+                          )}
+                          {explanations[item.id] === 'loading' && <p className="italic text-stone-500">Looking at the simulation state...</p>}
+                          {explanations[item.id] && explanations[item.id] !== 'loading' && (
+                            <p className="text-stone-300">
+                              {(explanations[item.id] as ExplainResult).insight || 'No explanation available right now.'}
+                              <span className="block text-[9px] text-stone-600 mt-1">
+                                {(explanations[item.id] as ExplainResult).source === 'gemini' ? 'Written by AI from the recorded simulation state only.' : 'From the recorded simulation state.'}
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
