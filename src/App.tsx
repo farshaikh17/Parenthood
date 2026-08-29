@@ -24,6 +24,7 @@ import {
 } from './types';
 import { SimulationEngine } from './simulation/engine';
 import { runAwayCatchup } from './simulation/autopilot';
+import { getCareDayNumber, getDevelopmentalAgeDays, isJourneyComplete } from './simulation/clock';
 import { accumulateAction, accumulateTick } from './simulation/dayLog';
 import { Disclaimer } from './components/Disclaimer';
 import { 
@@ -156,8 +157,8 @@ export default function App() {
         milestones
       );
 
-      const tickAgeDays = Math.max(0, Math.floor((settings.simulatedTimeMs + deltaSimMs - baby.birthTimestamp) / 86400000));
-      setDayLogs(prev => accumulateTick(prev, tickAgeDays, babyState, result.nextState, deltaSimMs / 60000, result.nextParents, result.newEvents));
+      const tickDay = Math.max(0, Math.floor((settings.simulatedTimeMs + deltaSimMs - baby.birthTimestamp) / 86400000));
+      setDayLogs(prev => accumulateTick(prev, tickDay, babyState, result.nextState, deltaSimMs / 60000, result.nextParents, result.newEvents));
 
       setBaby(result.nextBaby);
       setBabyState(result.nextState);
@@ -306,8 +307,7 @@ export default function App() {
     setBabyState(result.nextState);
     setParents(result.nextParents);
     setActionRecords(prev => [result.record, ...prev]);
-    const actionAgeDays = Math.max(0, Math.floor((settings.simulatedTimeMs - baby.birthTimestamp) / 86400000));
-    setDayLogs(prev => accumulateAction(prev, actionAgeDays, result.record));
+    setDayLogs(prev => accumulateAction(prev, getCareDayNumber(baby, settings), result.record));
 
     // Resolve active crying events if comforted or fed
     if (actionType === 'feed' || actionType === 'cuddle' || actionType === 'rock' || actionType === 'change_diaper' || actionType === 'burp' || actionType === 'put_to_sleep') {
@@ -354,7 +354,9 @@ export default function App() {
   };
 
   const unreadEventsCount = events.filter(e => !e.resolved).length;
-  const ageDays = baby ? Math.max(0, Math.floor((settings.simulatedTimeMs - baby.birthTimestamp) / (24 * 60 * 60 * 1000))) : 0;
+  const ageDays = baby ? getDevelopmentalAgeDays(baby) : 0;
+  const careDay = baby ? getCareDayNumber(baby, settings) : 0;
+  const journeyComplete = baby ? isJourneyComplete(baby) : false;
 
   const isMainScreen = ['dashboard', 'needs_status', 'parent_status', 'event_history', 'journal', 'settings'].includes(currentScreen);
 
@@ -376,6 +378,7 @@ export default function App() {
           }
           babyName={baby?.name}
           ageDays={ageDays}
+          careDay={careDay}
           settings={settings}
           onUpdateSettings={(newSettings) => setSettings(prev => ({ ...prev, ...newSettings }))}
         />
@@ -487,6 +490,11 @@ export default function App() {
         )}
       </main>
 
+      {isMainScreen && journeyComplete && (
+        <div className="px-4 py-2 text-[11px] text-teal-100 bg-teal-950/80 border-t border-teal-800 text-center">
+          {baby?.name} has reached six months. The final report arrives in a later update — you can keep caring for now.
+        </div>
+      )}
       {isMainScreen && <Disclaimer />}
 
       {/* Bottom Navigation Bar for Main Simulation Screens */}

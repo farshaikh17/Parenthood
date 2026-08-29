@@ -92,7 +92,15 @@ export interface Baby {
   temperament: TemperamentType;
   currentWeightGrams: number;
   currentLengthCm: number;
-  birthTimestamp: number; // Simulation timestamp of birth
+  birthTimestamp: number; // Care-clock timestamp of birth
+  /** Developmental age (fractional days). Advances faster than the care clock per the compression schedule. */
+  developmentalAgeDays: number;
+}
+
+/** One row of the compression schedule: until this developmental age, N developmental days pass per real day. */
+export interface CompressionStage {
+  untilAgeDays: number;
+  devDaysPerRealDay: number;
 }
 
 export interface CaregiverEffectivenessStats {
@@ -151,6 +159,8 @@ export interface SimulationSettings {
   awayAutopilotEnabled: boolean;
   /** Upper bound of simulated time processed on reopen. */
   awayCatchupMaxSimHours: number;
+  /** How developmental age maps onto real time. See simulation/clock.ts. */
+  compressionSchedule: CompressionStage[];
 }
 
 export interface CareActionRecord {
