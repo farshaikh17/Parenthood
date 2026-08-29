@@ -9,7 +9,9 @@ import {
   Baby, 
   BabyState, 
   CareActionRecord, 
+  DayLog,
   DifficultyMode, 
+  UnitSystem,
   HouseholdType, 
   JournalEntry, 
   Milestone, 
@@ -21,6 +23,9 @@ import {
   UserProfile 
 } from './types';
 import { SimulationEngine } from './simulation/engine';
+import { runAwayCatchup } from './simulation/autopilot';
+import { accumulateAction, accumulateTick } from './simulation/dayLog';
+import { Disclaimer } from './components/Disclaimer';
 import { 
   loadSavedAppData, 
   saveAppData, 
@@ -46,77 +51,35 @@ import { EventHistoryScreen } from './screens/EventHistoryScreen';
 import { JournalScreen } from './screens/JournalScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 
-// Function to load saved data with bounded catch-up simulation for elapsed real-world time
+// Load saved data and apply the away policy (bounded autopilot catch-up). See simulation/autopilot.ts.
 function getInitialDataWithCatchup() {
   const loaded = loadSavedAppData();
-  if (!loaded.baby || !loaded.babyState || loaded.settings.isPaused) {
-    return loaded;
-  }
-
-  const lastReal = loaded.settings.lastRealTimestampMs || Date.now();
+  if (!loaded.baby || !loaded.babyState) return loaded;
   const now = Date.now();
-  const elapsedRealMs = Math.max(0, now - lastReal);
-
-  // If real time has elapsed (> 3 seconds), perform bounded catch-up
-  if (elapsedRealMs > 3000) {
-    const rawSimulatedDeltaMs = elapsedRealMs * loaded.settings.timeSpeed;
-    // Bounded cap to prevent catastrophic unrecoverable state while away (max 12 hours of sim time)
-    const maxSimDeltaMs = 12 * 60 * 60 * 1000;
-    const effectiveSimDeltaMs = Math.min(rawSimulatedDeltaMs, maxSimDeltaMs);
-
-    if (effectiveSimDeltaMs > 0) {
-      // Step through in increments to simulate physiological decay smoothly
-      const stepSimMs = Math.max(60 * 1000, Math.min(5 * 60 * 1000, Math.floor(effectiveSimDeltaMs / 20)));
-      let currentBaby = loaded.baby;
-      let currentState = loaded.babyState;
-      let currentParents = loaded.parents;
-      let currentEvents = [...loaded.events];
-      let currentMilestones = [...loaded.milestones];
-      let accumulatedSimMs = 0;
-      const activeParentId = loaded.userProfile?.activeParentId || loaded.parents[0]?.id || 'parent_primary';
-
-      while (accumulatedSimMs < effectiveSimDeltaMs) {
-        const delta = Math.min(stepSimMs, effectiveSimDeltaMs - accumulatedSimMs);
-        const result = SimulationEngine.tick(
-          currentBaby,
-          currentState,
-          currentParents,
-          activeParentId,
-          loaded.settings,
-          delta,
-          currentEvents,
-          currentMilestones
-        );
-        currentBaby = result.nextBaby;
-        currentState = result.nextState;
-        currentParents = result.nextParents;
-        currentEvents = [...result.newEvents, ...currentEvents];
-        currentMilestones = result.updatedMilestones;
-        accumulatedSimMs += delta;
-      }
-
-      return {
-        ...loaded,
-        baby: currentBaby,
-        babyState: currentState,
-        parents: currentParents,
-        events: currentEvents,
-        milestones: currentMilestones,
-        settings: {
-          ...loaded.settings,
-          simulatedTimeMs: loaded.settings.simulatedTimeMs + effectiveSimDeltaMs,
-          lastRealTimestampMs: now,
-        },
-      };
-    }
-  }
-
+  const result = runAwayCatchup(
+    {
+      baby: loaded.baby,
+      babyState: loaded.babyState,
+      parents: loaded.parents,
+      userProfile: loaded.userProfile,
+      settings: loaded.settings,
+      events: loaded.events,
+      actionRecords: loaded.actionRecords,
+      milestones: loaded.milestones,
+      dayLogs: loaded.dayLogs,
+    },
+    now
+  );
   return {
     ...loaded,
-    settings: {
-      ...loaded.settings,
-      lastRealTimestampMs: now,
-    },
+    baby: result.baby,
+    babyState: result.babyState,
+    parents: result.parents,
+    settings: { ...result.settings, lastRealTimestampMs: now },
+    events: result.events,
+    actionRecords: result.actionRecords,
+    milestones: result.milestones,
+    dayLogs: result.dayLogs,
   };
 }
 
@@ -133,6 +96,7 @@ export default function App() {
   const [events, setEvents] = useState<SimulationEvent[]>(initialData.events);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>(initialData.journalEntries);
   const [milestones, setMilestones] = useState<Milestone[]>(initialData.milestones);
+  const [dayLogs, setDayLogs] = useState<DayLog[]>(initialData.dayLogs);
 
   // Active Screen state
   const [currentScreen, setCurrentScreen] = useState<AppScreen>(
@@ -141,6 +105,13 @@ export default function App() {
 
   // Action Modal state
   const [activeActionModal, setActiveActionModal] = useState<string | null>(null);
+  // Short-lived feedback after an action ("what happened after I did it?")
+  const [feedback, setFeedback] = useState<{ text: string; tone: 'good' | 'neutral' | 'bad' } | null>(null);
+  useEffect(() => {
+    if (!feedback) return;
+    const t = setTimeout(() => setFeedback(null), 7000);
+    return () => clearTimeout(t);
+  }, [feedback]);
 
   // Sync sound setting to audio synthesizer
   useEffect(() => {
@@ -162,8 +133,9 @@ export default function App() {
       events,
       journalEntries,
       milestones,
+      dayLogs,
     });
-  }, [userProfile, baby, babyState, parents, settings, actionRecords, events, journalEntries, milestones]);
+  }, [userProfile, baby, babyState, parents, settings, actionRecords, events, journalEntries, milestones, dayLogs]);
 
   // Main Simulation Loop Timer (Runs every 1 second)
   useEffect(() => {
@@ -183,6 +155,9 @@ export default function App() {
         events,
         milestones
       );
+
+      const tickAgeDays = Math.max(0, Math.floor((settings.simulatedTimeMs + deltaSimMs - baby.birthTimestamp) / 86400000));
+      setDayLogs(prev => accumulateTick(prev, tickAgeDays, babyState, result.nextState, deltaSimMs / 60000, result.nextParents, result.newEvents));
 
       setBaby(result.nextBaby);
       setBabyState(result.nextState);
@@ -205,6 +180,30 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, [baby, babyState, parents, settings, events, milestones, userProfile]);
+
+  // When the tab is hidden and shown again, run the away policy so a long background pause behaves like closing the app
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || !baby || !babyState) return;
+      const now = Date.now();
+      const result = runAwayCatchup(
+        { baby, babyState, parents, userProfile, settings, events, actionRecords, milestones, dayLogs },
+        now
+      );
+      if (result.processedSimMs > 0) {
+        setBaby(result.baby);
+        setBabyState(result.babyState);
+        setParents(result.parents);
+        setSettings(result.settings);
+        setEvents(result.events);
+        setActionRecords(result.actionRecords);
+        setMilestones(result.milestones);
+        setDayLogs(result.dayLogs);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [baby, babyState, parents, userProfile, settings, events, actionRecords, milestones, dayLogs]);
 
   // Calculate score report
   const scoreReport: ScoreReport = babyState && userProfile ? SimulationEngine.calculateScore(
@@ -249,11 +248,12 @@ export default function App() {
     setCurrentScreen('difficulty_select');
   };
 
-  const handleOnboardingStep3 = (difficulty: DifficultyMode, nighttimeAlerts: boolean) => {
+  const handleOnboardingStep3 = (difficulty: DifficultyMode, nighttimeAlerts: boolean, unitSystem: UnitSystem) => {
     setSettings(prev => ({
       ...prev,
       difficulty,
       nighttimeAlertsEnabled: nighttimeAlerts,
+      unitSystem,
     }));
     setCurrentScreen('create_baby');
   };
@@ -270,7 +270,6 @@ export default function App() {
       isSleeping: false,
       sleepMinutesElapsed: 0,
       awakeMinutesElapsed: 20,
-      temperatureFahrenheit: 98.6,
       healthState: 'healthy',
       mood: 'quiet_alert',
       lastFedTimestamp: Date.now() - (45 * 60 * 1000),
@@ -307,9 +306,11 @@ export default function App() {
     setBabyState(result.nextState);
     setParents(result.nextParents);
     setActionRecords(prev => [result.record, ...prev]);
+    const actionAgeDays = Math.max(0, Math.floor((settings.simulatedTimeMs - baby.birthTimestamp) / 86400000));
+    setDayLogs(prev => accumulateAction(prev, actionAgeDays, result.record));
 
     // Resolve active crying events if comforted or fed
-    if (actionType === 'feed' || actionType === 'cuddle' || actionType === 'change_diaper') {
+    if (actionType === 'feed' || actionType === 'cuddle' || actionType === 'rock' || actionType === 'change_diaper' || actionType === 'burp' || actionType === 'put_to_sleep') {
       setEvents(prev => prev.map(e => {
         if (!e.resolved && (e.type === 'crying_spell' || e.type === 'hunger_cue' || e.type === 'diaper_blowout')) {
           return { ...e, resolved: true, resolvedAt: settings.simulatedTimeMs };
@@ -318,7 +319,11 @@ export default function App() {
       }));
     }
 
-    soundFx.playSuccessChime();
+    setFeedback({
+      text: result.feedbackMessage,
+      tone: result.record.effectiveness === 'excellent' ? 'good' : result.record.effectiveness === 'ineffective' ? 'bad' : 'neutral'
+    });
+    if (result.record.effectiveness !== 'ineffective') soundFx.playSuccessChime();
   };
 
   // Switch Active Caregiver in Two-Parent Mode
@@ -344,6 +349,7 @@ export default function App() {
     setEvents([]);
     setJournalEntries([]);
     setMilestones(INITIAL_MILESTONES);
+    setDayLogs([]);
     setCurrentScreen('welcome');
   };
 
@@ -405,6 +411,7 @@ export default function App() {
 
         {currentScreen === 'create_baby' && (
           <CreateBabyScreen
+            unitSystem={settings.unitSystem}
             onComplete={handleBabyCreation}
             onBack={() => setCurrentScreen('difficulty_select')}
           />
@@ -432,6 +439,7 @@ export default function App() {
             babyState={babyState}
             scoreReport={scoreReport}
             simulatedTimeMs={settings.simulatedTimeMs}
+            unitSystem={settings.unitSystem}
             onOpenAction={(action) => setActiveActionModal(action)}
           />
         )}
@@ -464,6 +472,7 @@ export default function App() {
             journalEntries={journalEntries}
             recentEvents={events}
             actionRecords={actionRecords}
+            dayLogs={dayLogs}
             simulatedTimeMs={settings.simulatedTimeMs}
             onAddJournalEntry={(entry) => setJournalEntries(prev => [entry, ...prev])}
           />
@@ -477,6 +486,8 @@ export default function App() {
           />
         )}
       </main>
+
+      {isMainScreen && <Disclaimer />}
 
       {/* Bottom Navigation Bar for Main Simulation Screens */}
       {isMainScreen && (
@@ -498,9 +509,24 @@ export default function App() {
           babyState={babyState}
           parents={parents}
           userProfile={userProfile}
+          unitSystem={settings.unitSystem}
           onClose={() => setActiveActionModal(null)}
           onConfirmAction={handlePerformAction}
         />
+      )}
+
+      {/* Action feedback toast */}
+      {feedback && (
+        <div
+          onClick={() => setFeedback(null)}
+          className={`absolute left-3 right-3 bottom-24 z-40 p-3 rounded-2xl border text-xs leading-relaxed shadow-xl cursor-pointer animate-in fade-in slide-in-from-bottom-2 duration-200 ${
+            feedback.tone === 'good' ? 'bg-teal-950/95 border-teal-700 text-teal-100'
+            : feedback.tone === 'bad' ? 'bg-rose-950/95 border-rose-800 text-rose-100'
+            : 'bg-stone-800/95 border-stone-600 text-stone-100'
+          }`}
+        >
+          {feedback.text}
+        </div>
       )}
     </AndroidFrame>
   );

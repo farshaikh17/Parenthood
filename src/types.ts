@@ -11,6 +11,11 @@ export type TemperamentType = 'easygoing' | 'sensitive' | 'intense' | 'active' |
 
 export type DifficultyMode = 'realistic' | 'hardcore';
 
+export type UnitSystem = 'imperial' | 'metric';
+
+/** Who caused a record: the user, the off-screen autopilot, or the simulation itself. */
+export type RecordSource = 'user' | 'autopilot' | 'system';
+
 export type DevelopmentalStage = 'newborn' | 'social_infant' | 'infant_4_6mo';
 
 export type BabyMood = 
@@ -23,7 +28,12 @@ export type BabyMood =
   | 'active_crying' 
   | 'inconsolable';
 
-export type HealthCondition = 'healthy' | 'mild_gas' | 'overstimulated' | 'teething' | 'mild_fever';
+/**
+ * Health is intentionally minimal in V1. Only 'healthy' is ever produced by the engine.
+ * A genuine, evidence-informed health model is planned for M5; until then the UI must not
+ * display invented vital signs.
+ */
+export type HealthCondition = 'healthy';
 
 export type ActionCategory = 
   | 'feed' 
@@ -35,7 +45,7 @@ export type ActionCategory =
   | 'put_to_sleep' 
   | 'tummy_time' 
   | 'bathe' 
-  | 'check_health' 
+  | 'observe' 
   | 'parent_break'
   | 'switch_parent';
 
@@ -76,13 +86,13 @@ export interface Baby {
   id: string;
   name: string;
   sex: 'girl' | 'boy' | 'surprise';
-  birthWeightLbs: number;
-  birthWeightOz: number;
-  birthLengthInches: number;
+  /** Canonical units are metric; display conversion happens in utils/units.ts */
+  birthWeightGrams: number;
+  birthLengthCm: number;
   temperament: TemperamentType;
-  currentWeightLbs: number;
-  currentLengthInches: number;
-  birthTimestamp: number; // Simulation start timestamp
+  currentWeightGrams: number;
+  currentLengthCm: number;
+  birthTimestamp: number; // Simulation timestamp of birth
 }
 
 export interface CaregiverEffectivenessStats {
@@ -108,7 +118,6 @@ export interface BabyState {
   isSleeping: boolean;
   sleepMinutesElapsed: number;
   awakeMinutesElapsed: number;
-  temperatureFahrenheit: number;
   healthState: HealthCondition;
   mood: BabyMood;
 
@@ -135,13 +144,21 @@ export interface SimulationSettings {
   soundEffectsEnabled: boolean;
   simulatedTimeMs: number; // Current continuous time inside simulation
   lastRealTimestampMs?: number; // Real-world timestamp when last saved/ticked for catch-up continuity
+  unitSystem: UnitSystem;
+  /** Shows testing controls (speed multipliers, pause). Off for normal users. */
+  developerMode: boolean;
+  /** Away policy (Option B): simulation continues while closed, with bounded baseline autopilot care. */
+  awayAutopilotEnabled: boolean;
+  /** Upper bound of simulated time processed on reopen. */
+  awayCatchupMaxSimHours: number;
 }
 
 export interface CareActionRecord {
   id: string;
   actionType: ActionCategory;
   timestamp: number;
-  performedByParentId: string;
+  performedByParentId: string; // parent id, or 'autopilot'
+  source: RecordSource;
   details: string;
   effectiveness: 'excellent' | 'moderate' | 'ineffective';
   deltaSummary: {
@@ -172,7 +189,9 @@ export interface SimulationEvent {
     | 'peaceful_nap'
     | 'rolls_over'
     | 'sleep_regression'
-    | 'solid_food_interest';
+    | 'solid_food_interest'
+    | 'away_summary';
+  source?: RecordSource;
   title: string;
   description: string;
   educationalNote: string;
@@ -192,6 +211,20 @@ export interface Milestone {
   unlockedAtTimestamp?: number;
 }
 
+/** Truthful per-simulated-day counters, accumulated by the engine. Feeds journal stats and the final report. */
+export interface DayLog {
+  dayNumber: number;
+  feeds: number;
+  diaperChanges: number;
+  sleepMinutes: number;
+  cryingMinutes: number;
+  nightWakings: number;
+  autopilotActions: number;
+  userActions: number;
+  parentStressSum: number; // for averaging
+  parentStressSamples: number;
+}
+
 export interface JournalEntry {
   id: string;
   dayNumber: number;
@@ -207,6 +240,8 @@ export interface JournalEntry {
     sleepHoursTotal: number;
     cryingMinutesTotal: number;
     avgParentStress: number;
+    /** true when derived from actual DayLog counters (never invented) */
+    derivedFromLog: boolean;
   };
   milestonesEarned: string[];
 }
