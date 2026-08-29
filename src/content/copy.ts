@@ -39,6 +39,18 @@ export const DISCLAIMER_LONG =
 
 export const EDUCATION_BADGE = 'Simulation note';
 
+/** Sources consulted for the M2 tuning ranges. Cited on the items that use them. */
+export const SOURCES = {
+  nhsFirstDays: { label: 'NHS — Breastfeeding: the first few days (feeds "at least 8 to 12 times, or more, every 24 hours" in the first weeks)', url: 'https://www.nhs.uk/baby/breastfeeding-and-bottle-feeding/breastfeeding/the-first-few-days/' },
+  nhsSleepPatterns: { label: 'NHS — Your baby\'s sleep patterns (newborns ~8–18 h/day in short bursts; some 3–6-month-olds sleep 8 h+ at night)', url: 'https://www.nhs.uk/best-start-in-life/baby/baby-basics/newborn-and-baby-sleeping-advice-for-parents/your-babys-sleep-patterns/' },
+  whoFeeding: { label: 'WHO — Infant and young child feeding (exclusive breastfeeding for 6 months; complementary foods from about 6 months; responsive feeding day and night)', url: 'https://www.who.int/news-room/fact-sheets/detail/infant-and-young-child-feeding' },
+  whoGrowth: { label: 'WHO — Child growth standards: weight-for-age', url: 'https://www.who.int/tools/child-growth-standards/standards/weight-for-age' }
+};
+
+export const TIME_MODEL_EXPLAINER =
+  'Care happens in real time: feeds really are a couple of hours apart and night is your night. ' +
+  'Development is compressed so the six-month journey takes about six to eight real weeks — the newborn weeks pass slowest.';
+
 export const EDUCATIONAL_TOPICS: ContentItem[] = [
   {
     id: 'fourth_trimester',
@@ -57,21 +69,23 @@ export const EDUCATIONAL_TOPICS: ContentItem[] = [
     summary: 'Young babies can only stay awake comfortably for short stretches.',
     body:
       'The simulation tracks how long the baby has been awake. Past the stage-appropriate window, sleepiness rises quickly and ' +
-      'comfort drops, which is why an over-tired baby in the app fights sleep and cries more. Real babies vary a lot; the exact ' +
-      'windows here are simulation settings, not medical thresholds.',
-    status: 'heuristic',
-    sources: []
+      'comfort drops, which is why an over-tired baby in the app fights sleep and cries more. Newborn sleep totals vary widely ' +
+      '(guidance describes anywhere from about 8 to 18 hours a day, in short bursts). The exact windows here are simulation ' +
+      'settings, not medical thresholds.',
+    status: 'general',
+    sources: [SOURCES.nhsSleepPatterns]
   },
   {
     id: 'cluster_feeding',
     title: 'Feeds are not evenly spaced',
     summary: 'Some periods bring frequent, closely spaced feeds.',
     body:
-      'Babies do not feed on a fixed timer. In the simulation, hunger rises at a rate that depends on developmental stage, ' +
-      'temperament and recent feeds, and difficult periods can bunch feeds together. Treat the rhythm you see as an illustration, ' +
-      'not a schedule for a real baby.',
-    status: 'heuristic',
-    sources: []
+      'Babies do not feed on a fixed timer. Guidance for the first weeks describes at least 8–12 feeds in 24 hours, often more, ' +
+      'and feeding whenever the baby shows hunger. In the simulation, hunger rises at a rate that depends on developmental stage, ' +
+      'temperament and recent feeds, so feeds land roughly every two to three hours for a newborn, further apart later. ' +
+      'Treat the rhythm you see as an illustration, not a schedule for a real baby.',
+    status: 'general',
+    sources: [SOURCES.nhsFirstDays, SOURCES.whoFeeding]
   },
   {
     id: 'startle',
@@ -114,9 +128,10 @@ export const EVENT_NOTES: Record<string, ContentItem> = {
     summary: 'Young babies commonly wake at night to feed.',
     body:
       'Newborns in the simulation wake more readily at night when hungry, uncomfortable or gassy, and their sleep stretches are ' +
-      'shorter than an adult\'s. As the simulated baby grows, night stretches gradually lengthen.',
+      'shorter than an adult\'s. As the simulated baby grows, night stretches gradually lengthen; guidance notes that by three to ' +
+      'six months some babies sleep eight hours or longer at night — and many do not.',
     status: 'general',
-    sources: []
+    sources: [SOURCES.nhsSleepPatterns]
   },
   sleep_regression: {
     id: 'sleep_regression',
@@ -179,6 +194,6 @@ export const MILESTONE_NOTES: Record<string, string> = {
   entering_social_infant: 'The simulated baby now stays awake longer and interacts more.',
   entering_infant_4_6mo: 'The simulated baby is stronger, more curious and starting to move.',
   rolls_over: 'Rolling changes what is safe at sleep time. Seek proper guidance for a real baby.',
-  first_solid_food: 'The app lets you offer tastes of solids in the 4–6 month stage. When to start with a real baby is a question for a health professional.',
+  first_solid_food: 'The app lets you offer first tastes of solids at around six months, in line with general guidance. When to start with a real baby is a question for a health professional.',
   sleep_regression_4mo: 'A temporary period of more night waking modelled in the 4–6 month stage.'
 };
