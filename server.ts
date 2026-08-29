@@ -26,13 +26,13 @@ async function startServer() {
   // AI Journal reflection — grounded ONLY in the structured day log the client sends.
   app.post("/api/gemini/journal-reflection", async (req, res) => {
     try {
-      const { babyName, ageDays, temperament, caregivers, dayStats, events, actions, milestonesToday, parentNote } = req.body || {};
+      const { babyName, ageDays, careDay, temperament, caregivers, dayStats, events, actions, milestonesToday, parentNote } = req.body || {};
       const ai = getGeminiClient();
       const stats = dayStats || {};
 
       const factualFallback = () =>
         res.json({
-          reflection: `Day ${ageDays}: ${stats.feedsCount ?? 0} feeds, ${stats.diapersCount ?? 0} nappy changes, about ${stats.sleepHoursTotal ?? 0} hours of sleep and ${stats.cryingMinutesTotal ?? 0} minutes of crying.`,
+          reflection: `Day ${careDay ?? ageDays}: ${stats.feedsCount ?? 0} feeds, ${stats.diapersCount ?? 0} nappy changes, about ${stats.sleepHoursTotal ?? 0} hours of sleep and ${stats.cryingMinutesTotal ?? 0} minutes of crying.`,
           milestoneInsight: "",
           source: "offline_fallback"
         });
@@ -45,7 +45,7 @@ Use ONLY the facts below. Do not invent feeds, sleep, crying, milestones, illnes
 If the log is sparse, say the day was quiet. No medical claims, no diagnoses, no "research shows". 60-100 words, warm but plain.
 
 FACTS
-Baby: ${babyName}, age ${ageDays} days, temperament parameters: ${temperament}
+Baby: ${babyName}, developmental age ${ageDays} days (this is day ${careDay ?? '?'} of the parents caring for them), temperament parameters: ${temperament}
 Caregivers: ${JSON.stringify(caregivers || [])}
 Day counters (authoritative): ${JSON.stringify(stats)}
 Events today: ${JSON.stringify(events || [])}
