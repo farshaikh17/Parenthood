@@ -17,7 +17,8 @@ as a normal browser notification.
 5. Store the **private** key as a secret (never commit it): `npx wrangler secret put VAPID_PRIVATE_KEY`
 6. In `wrangler.toml`, set `ALLOWED_ORIGINS` to the address where the app is served (e.g. `https://parenthood.pages.dev`).
 7. For two-phone sharing, create the database: `npx wrangler d1 create parenthood` → paste the printed `database_id` into `wrangler.toml`, then `npx wrangler d1 execute parenthood --remote --file=schema.sql`.
-8. Deploy: `npm run deploy` → note the Worker URL (e.g. `https://parenthood-night-alerts.<you>.workers.dev`).
+8. Optional but recommended: `npx wrangler secret put GEMINI_API_KEY` so the Worker can also serve the AI journal / explanations when the app is hosted on Cloudflare Pages (see `DEPLOY.md`).
+9. Deploy: `npm run deploy` → note the Worker URL (e.g. `https://parenthood-night-alerts.<you>.workers.dev`).
 
 Then in the app's `.env` (see `.env.example` in the project root):
 
@@ -43,6 +44,8 @@ Rebuild the app. Settings → Night mode → "Alerts on this device" can now be 
 - `GET /sync/<CODE>?since=<version>` — the latest save, or 304 if nothing newer
 - `PUT /sync/<CODE>` `{ baseVersion, snapshot, create? }` — replace the save; 409 with the current save if `baseVersion` is stale
 - `DELETE /sync/<CODE>` — remove the household
+
+**AI text (M9, optional):** `POST /api/gemini/journal-reflection` and `POST /api/gemini/explain-event` — same contract as `server.ts`; factual fallbacks when no `GEMINI_API_KEY`.
 
 **Night alerts (M7):**
 
