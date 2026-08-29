@@ -1,0 +1,6 @@
+{
+  "name": "Parenthood",
+  "description": "Realistic baby caregiving simulation exploring the demands, interruptions, and rewards of parenting before having children.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
