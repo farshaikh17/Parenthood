@@ -49,6 +49,7 @@ export const SOURCES = {
   nhsSafeSleep: { label: 'NHS — Reduce the risk of sudden infant death syndrome (back to sleep, own cot in your room, clear cot, firm flat mattress, room 16–20 °C, move baby onto their back if they roll until they can roll both ways)', url: 'https://www.nhs.uk/baby/caring-for-a-newborn/reduce-the-risk-of-sudden-infant-death-syndrome/' },
   cdc2mo: { label: 'CDC — Milestones by 2 months (smiles when you talk to or smile at them; makes sounds other than crying; holds head up when on tummy)', url: 'https://www.cdc.gov/ncbddd/actearly/milestones/milestones-2mo.html' },
   cdc4mo: { label: 'CDC — Milestones by 4 months (cooing "oooo/aahh"; brings hands to mouth; pushes up onto forearms on tummy)', url: 'https://www.cdc.gov/ncbddd/actearly/milestones/milestones-4mo.html' },
+  nhsUrgentHelp: { label: 'NHS — When to get urgent medical help for babies and children under 5 (trust your instincts; call 999/A&E for breathing difficulty, blue/grey/mottled skin, non-fading rash, fever 38 °C+ under 3 months, weak high-pitched or continuous cry, hard to wake, no wee in 12 h, seizure; call 111 if worried)', url: 'https://www.nhs.uk/baby/health/when-to-get-urgent-medical-help-for-babies-and-children-under-5/' },
   cdc6mo: { label: 'CDC — Milestones by 6 months (rolls from tummy to back; laughs; takes turns making sounds)', url: 'https://www.cdc.gov/ncbddd/actearly/milestones/milestones-6mo.html' }
 };
 
@@ -129,6 +130,21 @@ export const EDUCATIONAL_TOPICS: ContentItem[] = [
   }
 ];
 
+/** Health honesty note shown wherever a mild episode appears. */
+export const HEALTH_NOTE: ContentItem = {
+  id: 'health_limits',
+  title: 'What the simulation does and does not model',
+  summary: 'Only mild, common, self-limiting episodes — never anything you would need a doctor for.',
+  body:
+    'The app models a blocked-up nose that makes feeding and sleeping harder, and the odd windy, unsettled day. It never ' +
+    'shows temperatures or diagnoses, and it never models serious illness. For a real baby, guidance is to trust your ' +
+    'instincts and get urgent help for signs such as difficulty breathing, blue/grey/mottled skin, a rash that does not fade ' +
+    'when pressed, a high temperature in a young baby, a weak or high-pitched continuous cry, being hard to wake, or no wet ' +
+    'nappies for 12 hours — and to call for advice whenever you are worried.',
+  status: 'reviewed',
+  sources: [SOURCES.nhsUrgentHelp]
+};
+
 /** Explanations attached to simulation events. Keyed so the engine never embeds prose. */
 export const EVENT_NOTES: Record<string, ContentItem> = {
   crying_spell: {
@@ -193,6 +209,55 @@ export const EVENT_NOTES: Record<string, ContentItem> = {
       'verdict on anything.',
     status: 'reviewed',
     sources: [SOURCES.cdc2mo, SOURCES.cdc4mo, SOURCES.cdc6mo]
+  },
+  growth_spurt: {
+    id: 'growth_spurt',
+    title: 'A hungrier couple of days',
+    summary: 'Feeds bunch up for a while, then settle again.',
+    body:
+      'Guidance for the first weeks describes feeds that are frequent and uneven, often more than 8–12 a day. The ' +
+      'simulation adds short "hungrier" spells at a few points in the early months: hunger rises faster, feeds come closer ' +
+      'together, and then it passes. It is not a sign anything is wrong.',
+    status: 'general',
+    sources: [SOURCES.nhsFirstDays]
+  },
+  evening_fussiness: {
+    id: 'evening_fussiness',
+    title: 'The evening stretch',
+    summary: 'Crying often peaks in the afternoon and evening in the early weeks.',
+    body:
+      'Guidance notes that crying tends to increase from around two weeks, ease around three months, and that afternoons ' +
+      'and evenings are the most common hard times. The simulation makes those hours harder during that window, and ' +
+      'sometimes nothing works straight away — that is modelled on purpose.',
+    status: 'reviewed',
+    sources: [SOURCES.nhsSoothing]
+  },
+  illness_start: {
+    id: 'illness_start',
+    title: 'A snuffly few days',
+    summary: 'A blocked nose makes feeding and sleeping harder for a while.',
+    body: HEALTH_NOTE.body,
+    status: 'reviewed',
+    sources: [SOURCES.nhsUrgentHelp]
+  },
+  illness_end: {
+    id: 'illness_end',
+    title: 'Back to normal',
+    summary: 'The episode has passed.',
+    body: 'Mild episodes in the simulation always pass on their own within a few days.',
+    status: 'heuristic',
+    sources: []
+  },
+  vaccination: {
+    id: 'vaccination',
+    title: 'Routine vaccination',
+    summary: 'A routine appointment; the baby may be unsettled afterwards.',
+    body:
+      'Vaccination schedules differ by country and are set by your local health service — the simulation uses a generic ' +
+      'early-months appointment and models a day of being a little more unsettled afterwards. It says nothing about which ' +
+      'vaccines or when; ask your health service.',
+    status: 'general',
+    sources: []
   },
   away_summary: {
     id: 'away_summary',
