@@ -181,6 +181,22 @@ export interface CareActionRecord {
   };
 }
 
+export interface EventSnapshot {
+  hunger: number;
+  sleepiness: number;
+  gasDiscomfort: number;
+  diaperSoiled: number;
+  diaperType: BabyState['diaperType'];
+  comfort: number;
+  awakeMinutes: number;
+  sleepMinutes: number;
+  isSleeping: boolean;
+  isNight: boolean;
+  minutesSinceFeed: number;
+  minutesSinceDiaper: number;
+  developmentalAgeDays: number;
+}
+
 export interface SimulationEvent {
   id: string;
   timestamp: number;
@@ -202,6 +218,8 @@ export interface SimulationEvent {
     | 'solid_food_interest'
     | 'away_summary';
   source?: RecordSource;
+  /** What the simulation looked like when this happened — the only thing an explanation may refer to. */
+  snapshot?: EventSnapshot;
   title: string;
   description: string;
   educationalNote: string;
