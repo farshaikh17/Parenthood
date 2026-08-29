@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { SimulationSettings, UnitSystem } from '../types';
 import { DISCLAIMER_LONG, TIME_MODEL_EXPLAINER } from '../content/copy';
 import { estimateRealDays } from '../simulation/clock';
+import { PushCapability, disableNightPush, enableNightPush, getCapability, isConfigured } from '../notifications/pushClient';
 import { 
   Settings as SettingsIcon, 
   ShieldAlert, 
@@ -25,13 +26,46 @@ interface SettingsScreenProps {
   settings: SimulationSettings;
   onUpdateSettings: (newSettings: Partial<SimulationSettings>) => void;
   onResetSimulation: () => void;
+  userId?: string;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   settings,
   onUpdateSettings,
-  onResetSimulation
+  onResetSimulation,
+  userId
 }) => {
+  const [pushCap, setPushCap] = useState<PushCapability | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMessage, setPushMessage] = useState<string | null>(null);
+  useEffect(() => { getCapability().then(setPushCap).catch(() => setPushCap({ status: 'unsupported', reason: 'This browser cannot receive push notifications.' })); }, []);
+
+  const handleTogglePush = async () => {
+    if (!userId || pushBusy) return;
+    setPushBusy(true);
+    setPushMessage(null);
+    try {
+      if (pushCap?.status === 'subscribed') {
+        await disableNightPush(userId);
+        setPushMessage('Night alerts are off for this device.');
+      } else {
+        const r = await enableNightPush(userId);
+        setPushMessage(r.message);
+      }
+      setPushCap(await getCapability());
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const pushExplanation = (() => {
+    if (!isConfigured()) return 'Alerts while the app is closed need the alert server, which is not connected in this build. Inside the app, night wakings still show as a dark baby-monitor screen with crying.';
+    if (!pushCap) return 'Checking what this device supports…';
+    if (pushCap.status === 'unsupported' || pushCap.status === 'needs_install' || pushCap.status === 'blocked') return pushCap.reason;
+    if (pushCap.status === 'subscribed') return `This device will be alerted at the simulated wake-ups tonight (${settings.difficulty === 'hardcore' ? 'up to three, at unpredictable times' : 'at most one'}). Turn this off any time.`;
+    return 'Your phone can buzz when the baby wakes at night, even with the app closed. Your browser will ask for permission when you turn this on.';
+  })();
+
   return (
     <div className="flex-1 p-4 space-y-4 text-stone-100 overflow-y-auto animate-in fade-in duration-200">
       
@@ -41,7 +75,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <span className="text-[10px] uppercase font-bold text-teal-400 font-mono">Settings</span>
           <h2 className="text-base font-bold text-stone-100 mt-0.5">Settings</h2>
           <p className="text-xs text-stone-400">
-            Version <span className="text-teal-300 font-medium">1.1 (M1)</span>
+            Version <span className="text-teal-300 font-medium">1.7 (M7)</span>
           </p>
         </div>
 
@@ -193,12 +227,24 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           The baby wakes during simulated night hours ({settings.nighttimeQuietStartHour}:00–{settings.nighttimeQuietEndHour}:00) and needs you.
         </p>
         
-        {/* Notice & Disclosure */}
-        <div className="p-2.5 rounded-xl bg-stone-950/70 border border-indigo-900/50 flex items-start space-x-2 text-[11px] text-stone-300 leading-relaxed">
-          <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
-          <span>
-            <strong className="text-indigo-200 font-semibold">Right now:</strong> night wakings happen inside the app only. Nothing will notify or wake you while the app is closed. Real notifications are a planned, opt-in feature.
-          </span>
+        {/* Night alerts on this device (M7) */}
+        <div className="p-2.5 rounded-xl bg-stone-950/70 border border-indigo-900/50 space-y-2 text-[11px] text-stone-300 leading-relaxed">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-indigo-200">Alerts on this device while the app is closed</span>
+            <button
+              onClick={handleTogglePush}
+              disabled={!settings.nighttimeAlertsEnabled || pushBusy || !isConfigured() || !pushCap || pushCap.status === 'unsupported' || pushCap.status === 'needs_install' || pushCap.status === 'blocked'}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border ${pushCap?.status === 'subscribed' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-stone-800 border-stone-600 text-stone-200'} disabled:opacity-40`}
+            >
+              {pushBusy ? '…' : pushCap?.status === 'subscribed' ? 'On' : 'Turn on'}
+            </button>
+          </div>
+          <div className="flex items-start space-x-2">
+            <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+            <span>{pushExplanation}</span>
+          </div>
+          {pushMessage && <p className="text-[10px] text-teal-300">{pushMessage}</p>}
+          <p className="text-[10px] text-stone-500">Android and desktop browsers: works from the browser. iPhone/iPad: only after adding Parenthood to the Home Screen (iOS 16.4 or newer). Nothing about your baby is stored on the alert server except the alert times.</p>
         </div>
       </div>
 
