@@ -15,23 +15,22 @@ import {
 } from '../types';
 import { INITIAL_MILESTONES } from './initialData';
 
-function createMockBaby(overrides: Partial<Baby> = {}): Baby {
+export function createMockBaby(overrides: Partial<Baby> = {}): Baby {
   return {
     id: 'test_baby',
     name: 'Leo',
     sex: 'boy',
     birthTimestamp: 1700000000000,
-    birthWeightLbs: 7,
-    birthWeightOz: 8,
-    birthLengthInches: 20.0,
-    currentWeightLbs: 7.5,
-    currentLengthInches: 20.0,
+    birthWeightGrams: 3400,
+    birthLengthCm: 50.8,
+    currentWeightGrams: 3400,
+    currentLengthCm: 50.8,
     temperament: 'easygoing',
     ...overrides,
   };
 }
 
-function createMockState(overrides: Partial<BabyState> = {}): BabyState {
+export function createMockState(overrides: Partial<BabyState> = {}): BabyState {
   return {
     hunger: 20,
     sleepiness: 20,
@@ -43,7 +42,6 @@ function createMockState(overrides: Partial<BabyState> = {}): BabyState {
     isSleeping: false,
     sleepMinutesElapsed: 0,
     awakeMinutesElapsed: 10,
-    temperatureFahrenheit: 98.6,
     healthState: 'healthy',
     mood: 'quiet_alert',
     lastFedTimestamp: 1700000000000,
@@ -56,7 +54,7 @@ function createMockState(overrides: Partial<BabyState> = {}): BabyState {
   };
 }
 
-function createMockParents(): Parent[] {
+export function createMockParents(): Parent[] {
   return [
     {
       id: 'parent_1',
@@ -83,7 +81,7 @@ function createMockParents(): Parent[] {
   ];
 }
 
-function createMockSettings(overrides: Partial<SimulationSettings> = {}): SimulationSettings {
+export function createMockSettings(overrides: Partial<SimulationSettings> = {}): SimulationSettings {
   return {
     timeSpeed: 1,
     isPaused: false,
@@ -94,11 +92,15 @@ function createMockSettings(overrides: Partial<SimulationSettings> = {}): Simula
     soundEffectsEnabled: true,
     simulatedTimeMs: 1700000000000 + 3600000 * 12, // 12:00 PM
     lastRealTimestampMs: Date.now(),
+    unitSystem: 'imperial',
+    developerMode: false,
+    awayAutopilotEnabled: true,
+    awayCatchupMaxSimHours: 24,
     ...overrides,
   };
 }
 
-function createMockUserProfile(overrides: Partial<UserProfile> = {}): UserProfile {
+export function createMockUserProfile(overrides: Partial<UserProfile> = {}): UserProfile {
   return {
     id: 'user_1',
     motivation: 'planning_children',
@@ -226,7 +228,7 @@ describe('SimulationEngine', () => {
       const parents = createMockParents();
       const settings = createMockSettings({ simulatedTimeMs: 1700050000000 });
 
-      const result = SimulationEngine.applyAction('feed', baby, state, parents, 'parent_1', settings, { amountOz: 3 });
+      const result = SimulationEngine.applyAction('feed', baby, state, parents, 'parent_1', settings, { amountMl: 90 });
 
       expect(result.nextState.hunger).toBeLessThan(state.hunger);
       expect(result.nextState.comfort).toBeGreaterThan(state.comfort);

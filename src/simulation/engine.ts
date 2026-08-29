@@ -18,7 +18,20 @@ import {
   SimulationSettings, 
   UserProfile 
 } from '../types';
-import { TEMPERAMENTS, INITIAL_MILESTONES } from './initialData';
+import { TEMPERAMENTS } from './initialData';
+import { EVENT_NOTES, MILESTONE_NOTES } from '../content/copy';
+import { formatVolume } from '../utils/units';
+
+/** Stable-enough IDs based on simulation time (not wall clock) plus a short random suffix. */
+export function makeId(prefix: string, simTime: number): string {
+  return `${prefix}_${Math.floor(simTime)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+export function isNighttimeHour(hour: number, settings: SimulationSettings): boolean {
+  const start = settings.nighttimeQuietStartHour ?? 22;
+  const end = settings.nighttimeQuietEndHour ?? 7;
+  return start > end ? (hour >= start || hour < end) : (hour >= start && hour < end);
+}
 
 export function getDevelopmentalStage(ageDays: number): DevelopmentalStage {
   if (ageDays < 56) return 'newborn'; // 0-8 weeks (0 to 55 days)
@@ -71,16 +84,19 @@ export class SimulationEngine {
     const simTime = settings.simulatedTimeMs + deltaSimulatedMs;
     const simDate = new Date(simTime);
     const currentHour = simDate.getHours();
-    const isNighttime = currentHour >= 22 || currentHour < 7;
+    const isNighttime = isNighttimeHour(currentHour, settings);
 
     // 1. Calculate Age in Days, Developmental Stage & Growth
     const ageDays = Math.max(0, Math.floor((simTime - baby.birthTimestamp) / (24 * 60 * 60 * 1000)));
     const stage = SimulationEngine.getDevelopmentalStage(ageDays);
     
-    // Slow weight and length gain (approx 1 oz per 2 sim days)
-    const weightGain = (deltaMinutes / (24 * 60)) * 0.04;
-    nextBaby.currentWeightLbs = parseFloat((baby.birthWeightLbs + (ageDays * 0.05) + (weightGain)).toFixed(2));
-    nextBaby.currentLengthInches = parseFloat((baby.birthLengthInches + (ageDays * 0.02)).toFixed(1));
+    // Growth is a smooth simulation heuristic (roughly 25 g/day in the first ~3 months, ~17 g/day after; ~0.09 cm/day).
+    // Not a growth chart. Real growth is assessed by health professionals.
+    const gramsPerDay = ageDays < 90 ? 25 : 17;
+    const gainedGrams = ageDays < 90 ? ageDays * 25 : (90 * 25) + ((ageDays - 90) * 17);
+    const fractionalDayGain = (deltaMinutes / (24 * 60)) * gramsPerDay;
+    nextBaby.currentWeightGrams = Math.round(baby.birthWeightGrams + gainedGrams + fractionalDayGain);
+    nextBaby.currentLengthCm = parseFloat((baby.birthLengthCm + (ageDays * 0.09)).toFixed(1));
 
     // Bounded 4-month sleep regression window (days 120 to 134, lasting 2 weeks)
     const isSleepRegression = stage === 'infant_4_6mo' && ageDays >= 120 && ageDays <= 134;
@@ -159,19 +175,16 @@ export class SimulationEngine {
 
           if (!hasRecentUnresolved) {
             newEvents.push({
-              id: `night_wake_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+              id: makeId('night_wake', simTime),
               timestamp: simTime,
               dayNumber: ageDays,
               type: isSleepRegression ? 'sleep_regression' : 'night_waking',
               title: isSleepRegression ? '4-Month Sleep Regression Awakening' : 'Nighttime Awakening',
+              source: 'system',
               description: isSleepRegression 
-                ? `${baby.name} woke up during sleep cycle transition. The 4-month sleep leap reorganizes sleep stages into mature adult-like patterns.`
-                : `${baby.name} woke up at night (${new Date(simTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}) needing care and comfort.`,
-              educationalNote: isSleepRegression
-                ? 'Around 4 months, infant sleep cycles mature from 2 stages into 4 stages, creating brief awakenings between 45-minute sleep cycles.'
-                : stage === 'newborn'
-                ? 'Newborns have small stomach capacities and lack circadian melatonin rhythms, making nighttime awakenings every 2-3 hours biologically essential.'
-                : 'Infant nighttime awakenings are natural responses to hunger, temperature, diaper discomfort, and developmental leaps.',
+                ? `${baby.name} woke between sleep cycles during a rough patch of sleep.`
+                : `${baby.name} woke up at night (${new Date(simTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}) and needs you.`,
+              educationalNote: isSleepRegression ? EVENT_NOTES.sleep_regression.body : EVENT_NOTES.night_waking.body,
               severity: 'warning',
               resolved: false
             });
@@ -203,13 +216,14 @@ export class SimulationEngine {
         const rollChance = 0.008 * deltaMinutes;
         if (Math.random() < rollChance && existingEvents.filter(e => e.type === 'rolls_over' && (simTime - e.timestamp) < 24 * 60 * 60 * 1000).length === 0) {
           newEvents.push({
-            id: `roll_${Date.now()}`,
+            id: makeId('roll', simTime),
             timestamp: simTime,
             dayNumber: ageDays,
             type: 'rolls_over',
-            title: `${baby.name} Rolled Over!`,
-            description: `${baby.name} rolled over independently on the play mat, showing developing trunk stability and core strength!`,
-            educationalNote: 'Rolling over is a crucial gross motor milestone. Transition out of swaddles into sleep sacks for safe sleep.',
+            source: 'system',
+            title: `${baby.name} rolled over`,
+            description: `${baby.name} rolled over on the play mat for the first time.`,
+            educationalNote: EVENT_NOTES.rolls_over.body,
             severity: 'info',
             resolved: true,
             resolvedAt: simTime
@@ -238,13 +252,14 @@ export class SimulationEngine {
 
         if (isDirty && settings.difficulty === 'hardcore' && Math.random() < 0.25) {
           newEvents.push({
-            id: `blowout_${Date.now()}`,
+            id: makeId('blowout', simTime),
             timestamp: simTime,
             dayNumber: ageDays,
             type: 'diaper_blowout',
-            title: 'Diaper Blowout & Clothes Change',
-            description: `${baby.name} had a significant diaper leak that requires a full change and gentle cleanup.`,
-            educationalNote: 'Liquid infant diets and developing abdominal muscles make occasional diaper blowouts a common parenting reality.',
+            source: 'system',
+            title: 'Nappy leak and clothes change',
+            description: `${baby.name}'s nappy leaked. A full change of clothes is needed.`,
+            educationalNote: EVENT_NOTES.diaper_blowout.body,
             severity: 'warning',
             resolved: false
           });
@@ -304,13 +319,14 @@ export class SimulationEngine {
     // Trigger crying spell event if crying persists > 5 minutes
     if (nextState.cryingMinutesContinuous > 5 && existingEvents.filter(e => !e.resolved && e.type === 'crying_spell').length === 0) {
       newEvents.push({
-        id: `cry_${Date.now()}`,
+        id: makeId('cry', simTime),
         timestamp: simTime,
         dayNumber: ageDays,
         type: 'crying_spell',
-        title: `${baby.name} is Crying`,
-        description: `${baby.name} is crying and communicating distress. Primary needs: ${nextState.hunger > 60 ? 'Hunger' : nextState.diaperSoiled > 50 ? 'Diaper' : nextState.gasDiscomfort > 50 ? 'Gas' : 'Soothing/Sleep'}.`,
-        educationalNote: 'Infant cries serve as an urgent biological alarm designed to trigger parental cortisol and prompt immediate caregiving response.',
+        source: 'system',
+        title: `${baby.name} is crying`,
+        description: `${baby.name} has been crying for a while. ${nextState.mood === 'inconsolable' ? 'It is getting harder to settle them.' : 'Something needs attention.'}`,
+        educationalNote: EVENT_NOTES.crying_spell.body,
         severity: nextState.mood === 'inconsolable' ? 'urgent' : 'warning',
         resolved: false
       });
@@ -376,13 +392,14 @@ export class SimulationEngine {
           };
 
           newEvents.push({
-            id: `milestone_${m.id}_${Date.now()}`,
+            id: makeId(`milestone_${m.id}`, simTime),
             timestamp: simTime,
             dayNumber: ageDays,
             type: 'developmental_milestone',
-            title: `Milestone: ${m.title}!`,
-            description: `${baby.name} achieved a key developmental leap! ${m.description}`,
-            educationalNote: m.educationalInsight,
+            source: 'system',
+            title: `Milestone: ${m.title}`,
+            description: `${baby.name}: ${m.description}`,
+            educationalNote: MILESTONE_NOTES[m.id] || EVENT_NOTES.developmental_milestone.body,
             severity: 'info',
             resolved: true,
             resolvedAt: simTime
@@ -410,7 +427,8 @@ export class SimulationEngine {
     parents: Parent[],
     activeParentId: string,
     settings: SimulationSettings,
-    actionParams: any = {}
+    actionParams: any = {},
+    options: { source?: 'user' | 'autopilot' } = {}
   ): {
     nextState: BabyState;
     nextParents: Parent[];
@@ -418,6 +436,8 @@ export class SimulationEngine {
     feedbackMessage: string;
     resolvedEventIds?: string[];
   } {
+    const source = options.source || 'user';
+    const isAutopilot = source === 'autopilot';
     const nextState = { ...state };
     let nextParents = parents.map(p => ({ ...p }));
     const simTime = settings.simulatedTimeMs;
@@ -447,8 +467,9 @@ export class SimulationEngine {
 
     switch (actionType) {
       case 'feed': {
-        const feedAmountOz = actionParams.amountOz || (baby.currentWeightLbs > 10 ? 4 : 2.5);
-        const reduction = Math.min(nextState.hunger, feedAmountOz * 25);
+        // Canonical volume is millilitres. ~30 ml reduces hunger by ~25 points.
+        const feedAmountMl: number = actionParams.amountMl || (baby.currentWeightGrams > 4500 ? 120 : 75);
+        const reduction = Math.min(nextState.hunger, (feedAmountMl / 30) * 25);
         nextState.hunger = Math.max(0, nextState.hunger - reduction);
         nextState.lastFedTimestamp = simTime;
         // Feeding introduces air/gas
@@ -456,7 +477,7 @@ export class SimulationEngine {
         nextState.comfort = Math.min(100, nextState.comfort + 20);
         
         effectiveness = reduction > 30 ? 'excellent' : 'moderate';
-        feedback = `${baby.name} drank ${feedAmountOz} oz. Hunger satisfied. Needs burping to prevent gas discomfort.`;
+        feedback = `${baby.name} took ${formatVolume(feedAmountMl, settings.unitSystem || 'imperial')}.${reduction >= 30 ? ' Hunger eased.' : ' Still seems hungry.'} A burp may be needed.`;
         
         deltaSummary.hunger = -reduction;
         deltaSummary.gas = +25;
@@ -466,7 +487,7 @@ export class SimulationEngine {
 
       case 'feed_solids': {
         if (stage !== 'infant_4_6mo') {
-          feedback = `${baby.name} is ${ageDays} days old (${stage.replace('_', ' ')} stage). The AAP recommends exclusive milk/formula until 4-6 months (17+ weeks) when physical readiness cues appear.`;
+          feedback = `${baby.name} is only ${ageDays} days old. In this simulation solids are not offered before the 4–6 month stage.`;
           effectiveness = 'ineffective';
         } else {
           const reduction = Math.min(nextState.hunger, 35);
@@ -478,7 +499,7 @@ export class SimulationEngine {
 
           effectiveness = 'excellent';
           const foodName = actionParams.foodType || 'sweet potato puree';
-          feedback = `Fed ${baby.name} small spoonfuls of ${foodName}. ${baby.name} practiced swallowing textures and explored solid food with enthusiasm!`;
+          feedback = `Offered ${baby.name} small spoonfuls of ${foodName}. Most of it ended up on the bib, some went in.`;
 
           deltaSummary.hunger = -reduction;
           deltaSummary.comfort = +25;
@@ -493,7 +514,7 @@ export class SimulationEngine {
         nextState.comfort = Math.min(100, nextState.comfort + 15);
         
         effectiveness = gasRelief > 10 ? 'excellent' : 'moderate';
-        feedback = `Gently patted ${baby.name}'s back. Released trapped air bubbles.`;
+        feedback = gasRelief > 10 ? `Patted ${baby.name}'s back. A burp came up.` : `Patted ${baby.name}'s back. Nothing much came up this time.`;
         
         deltaSummary.gas = -gasRelief;
         deltaSummary.comfort = +15;
@@ -507,7 +528,7 @@ export class SimulationEngine {
         nextState.comfort = Math.min(100, nextState.comfort + 30);
         
         effectiveness = 'excellent';
-        feedback = `Changed ${baby.name} into a fresh, dry diaper and applied soothing barrier cream.`;
+        feedback = `Changed ${baby.name} into a clean nappy.`;
         
         deltaSummary.comfort = +30;
         break;
@@ -525,10 +546,10 @@ export class SimulationEngine {
           nextState.isSleeping = true;
           nextState.sleepMinutesElapsed = 0;
           nextState.mood = 'sleeping_light';
-          feedback = `${baby.name} relaxed against your chest, felt your heartbeat, and drifted peacefully off to sleep.`;
+          feedback = `${baby.name} relaxed against your chest and drifted off to sleep.`;
           effectiveness = 'excellent';
         } else {
-          feedback = `Held ${baby.name} close. Skin-to-skin contact lowers cortisol and provides comforting reassurance.`;
+          feedback = `Held ${baby.name} close. ${nextState.comfort > 60 ? 'They settled a little.' : 'They are still unsettled.'}`;
           effectiveness = 'moderate';
         }
 
@@ -538,21 +559,19 @@ export class SimulationEngine {
 
       case 'put_to_sleep': {
         if (nextState.hunger > 60) {
-          feedback = `${baby.name} is too hungry to settle down into the crib right now. Try feeding first.`;
+          feedback = `${baby.name} won't settle in the cot. They root and fuss when put down.`;
           effectiveness = 'ineffective';
         } else if (nextState.gasDiscomfort > 55) {
-          feedback = `${baby.name} has trapped gas discomfort. Try burping or gentle bicycle legs before sleep.`;
+          feedback = `${baby.name} squirms and pulls their legs up when put down. Something is uncomfortable.`;
           effectiveness = 'ineffective';
         } else if (nextState.sleepiness < 30) {
-          feedback = `${baby.name} is wide awake and alert. Not ready for sleep yet.`;
+          feedback = `${baby.name} is wide awake and looks around. Not ready for sleep yet.`;
           effectiveness = 'ineffective';
         } else {
           nextState.isSleeping = true;
           nextState.sleepMinutesElapsed = 0;
           nextState.comfort = Math.min(100, nextState.comfort + 10);
-          feedback = stage === 'infant_4_6mo'
-            ? `Placed ${baby.name} safely on back in the crib in a sleep sack with white noise.`
-            : `Swaddled ${baby.name}, turned on soothing white noise, and placed safely on back in the crib.`;
+          feedback = `Put ${baby.name} down on their back in the cot. They drifted off.`;
           effectiveness = 'excellent';
           deltaSummary.sleepiness = 0;
         }
@@ -570,7 +589,7 @@ export class SimulationEngine {
           nextState.lastTummyTimeTimestamp = simTime;
           nextState.gasDiscomfort = Math.max(0, nextState.gasDiscomfort - 20);
           nextState.sleepiness = Math.min(100, nextState.sleepiness + 15);
-          feedback = `Supervised floor play! ${baby.name} pushed up with arms and engaged core trunk muscles.`;
+          feedback = `A short, supervised tummy-time session. ${baby.name} worked hard and got tired.`;
           effectiveness = 'excellent';
         }
         break;
@@ -579,13 +598,24 @@ export class SimulationEngine {
       case 'bathe': {
         nextState.comfort = Math.min(100, nextState.comfort + 25);
         nextState.sleepiness = Math.min(100, nextState.sleepiness + 20);
-        feedback = `Gave ${baby.name} a warm, soothing bath. Promotes nighttime relaxation.`;
+        feedback = `Gave ${baby.name} a warm bath. They are calmer and sleepier.`;
         effectiveness = 'excellent';
         break;
       }
 
-      case 'check_health': {
-        feedback = `Temperature: 98.6°F (Normal). Fontanelles soft, skin clear, breathing regular and calm.`;
+      case 'observe': {
+        // Observable cues only — derived from simulation state. No vital signs, no diagnosis.
+        const cues: string[] = [];
+        if (nextState.isSleeping) cues.push('sleeping' + (nextState.comfort < 50 ? ', stirring and twitching' : ' peacefully'));
+        else {
+          if (nextState.cryingMinutesContinuous > 5) cues.push(`crying for about ${Math.round(nextState.cryingMinutesContinuous)} minutes`);
+          if (nextState.hunger > 60) cues.push('rooting and sucking on hands');
+          if (nextState.gasDiscomfort > 45) cues.push('pulling legs up and squirming');
+          if (nextState.sleepiness > 70) cues.push('rubbing eyes, yawning, staring blankly');
+          if (nextState.diaperSoiled > 50) cues.push(`nappy feels ${nextState.diaperType === 'dirty' || nextState.diaperType === 'both' ? 'dirty' : 'wet'}`);
+          if (cues.length === 0) cues.push('calm and alert, looking around');
+        }
+        feedback = `You watch ${baby.name} for a moment: ${cues.join('; ')}.`;
         effectiveness = 'moderate';
         break;
       }
@@ -602,7 +632,7 @@ export class SimulationEngine {
           }
           return p;
         });
-        feedback = `Parent stepped away for 10 minutes of hydration, deep breathing, and mindful self-care.`;
+        feedback = `You stepped away for ten minutes. It helped a bit; the baby is still there when you come back.`;
         effectiveness = 'excellent';
         break;
       }
@@ -619,8 +649,8 @@ export class SimulationEngine {
       }
     }
 
-    // Deterministic Caregiver Memory & Effectiveness Update
-    if (isSoothingAction) {
+    // Deterministic Caregiver Memory & Effectiveness Update (never for autopilot care)
+    if (isSoothingAction && !isAutopilot) {
       const isSuccess = effectiveness === 'excellent' || (effectiveness === 'moderate' && nextState.comfort >= state.comfort);
       const timeToSoothe = state.cryingMinutesContinuous > 0 
         ? Math.max(1, state.cryingMinutesContinuous) 
@@ -659,7 +689,7 @@ export class SimulationEngine {
 
     // Update active parent confidence and stress based on effectiveness and caregiver track-record
     nextParents = nextParents.map(p => {
-      if (p.id === activeParentId) {
+      if (p.id === activeParentId && !isAutopilot) {
         const baseConfDelta = effectiveness === 'excellent' ? +4 : effectiveness === 'moderate' ? +2 : -2;
         const confDelta = baseConfDelta + (effectiveness !== 'ineffective' ? caregiverConfidenceBonus : 0);
         const strDelta = effectiveness === 'excellent' ? -8 : effectiveness === 'moderate' ? -3 : +5;
@@ -674,10 +704,11 @@ export class SimulationEngine {
     });
 
     const record: CareActionRecord = {
-      id: `act_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      id: makeId('act', simTime),
       actionType: actionType as any,
       timestamp: simTime,
-      performedByParentId: activeParentId,
+      performedByParentId: isAutopilot ? 'autopilot' : activeParentId,
+      source,
       details: feedback,
       effectiveness,
       deltaSummary
