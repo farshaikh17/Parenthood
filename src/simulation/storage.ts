@@ -17,6 +17,7 @@ import {
 } from '../types';
 import { INITIAL_MILESTONES } from './initialData';
 import { inchesToCm, lbsOzToGrams } from '../utils/units';
+import { DEFAULT_COMPRESSION_SCHEDULE } from './clock';
 
 /**
  * STORAGE / REPOSITORY BOUNDARY
@@ -57,7 +58,7 @@ export interface AppSavedData {
 export function getDefaultSettings(): SimulationSettings {
   return {
     difficulty: 'realistic',
-    timeSpeed: 60, // Default 60x (1 real sec = 1 sim min, 1 real min = 1 sim hr)
+    timeSpeed: 1, // Production: care clock runs in real time. Developer mode can change it.
     isPaused: false,
     nighttimeAlertsEnabled: false,
     nighttimeQuietStartHour: 22,
@@ -69,18 +70,29 @@ export function getDefaultSettings(): SimulationSettings {
     developerMode: false,
     awayAutopilotEnabled: true,
     awayCatchupMaxSimHours: 24,
+    compressionSchedule: DEFAULT_COMPRESSION_SCHEDULE,
   };
 }
 
 /** Fills in fields added after a user's data was first saved. */
 function migrateSettings(raw: any): SimulationSettings {
-  return { ...getDefaultSettings(), ...(raw || {}) };
+  const merged = { ...getDefaultSettings(), ...(raw || {}) } as SimulationSettings;
+  // Saves from before M2 ran at 60x by default; production is real time unless developer mode is on.
+  if (raw && raw.compressionSchedule === undefined && !merged.developerMode) merged.timeSpeed = 1;
+  return merged;
 }
 
 /** Older saves stored imperial units and a fake temperature field. Convert once on load. */
 function migrateBaby(raw: any): Baby | null {
   if (!raw) return null;
-  if (typeof raw.birthWeightGrams === 'number') return raw as Baby;
+  if (typeof raw.birthWeightGrams === 'number') {
+    // Pre-M2 saves have no developmental age: derive it from care-clock age so nothing resets.
+    if (typeof raw.developmentalAgeDays !== 'number') {
+      const careDays = Math.max(0, (Date.now() - Number(raw.birthTimestamp || Date.now())) / 86400000);
+      return { ...raw, developmentalAgeDays: Math.min(careDays, 200) } as Baby;
+    }
+    return raw as Baby;
+  }
   const birthLbs = Number(raw.birthWeightLbs || 7);
   const birthGrams = lbsOzToGrams(Math.floor(birthLbs), Math.round((birthLbs % 1) * 16));
   const curLbs = Number(raw.currentWeightLbs || birthLbs);
@@ -95,6 +107,7 @@ function migrateBaby(raw: any): Baby | null {
     birthLengthCm: inchesToCm(Number(raw.birthLengthInches || 19.5)),
     currentWeightGrams: curGrams,
     currentLengthCm: inchesToCm(Number(raw.currentLengthInches || raw.birthLengthInches || 19.5)),
+    developmentalAgeDays: Math.min(200, Math.max(0, (Date.now() - Number(raw.birthTimestamp || Date.now())) / 86400000)),
   };
 }
 

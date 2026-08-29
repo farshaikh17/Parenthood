@@ -21,6 +21,7 @@ import {
 import { TEMPERAMENTS } from './initialData';
 import { EVENT_NOTES, MILESTONE_NOTES } from '../content/copy';
 import { formatVolume } from '../utils/units';
+import { advanceDevelopmentalAge, DEFAULT_COMPRESSION_SCHEDULE, getDevelopmentalAgeDays } from './clock';
 
 /** Stable-enough IDs based on simulation time (not wall clock) plus a short random suffix. */
 export function makeId(prefix: string, simTime: number): string {
@@ -38,6 +39,29 @@ export function getDevelopmentalStage(ageDays: number): DevelopmentalStage {
   if (ageDays < 119) return 'social_infant'; // 8-17 weeks (56 to 118 days)
   return 'infant_4_6mo'; // 17-26 weeks (119+ days)
 }
+
+/**
+ * STAGE TUNING (simulation heuristics, informed by general guidance — see content/copy.ts sources)
+ * - Newborns typically feed 8–12+ times in 24 h (NHS): hunger climbs 0→100 in ~2.5 h so a feed is wanted every 2–3 h.
+ * - Newborn sleep totals vary widely (NHS: ~8–18 h/day) in short bursts; wake windows are short.
+ * - By 3–6 months some babies sleep longer stretches at night (NHS: "8 hours or longer" for some).
+ * - Solids: WHO recommends around 6 months, not before.
+ * These numbers shape the FEEL of the simulation; they are not medical thresholds.
+ */
+export const STAGE_TUNING: Record<DevelopmentalStage, {
+  hungerFullToStarvingMinutes: number; // time for hunger to go 0 → 100 while awake, average temperament
+  nightHungerFactor: number;           // hunger climbs slower during night sleep
+  wakeWindowMinutes: number;           // comfortable awake stretch; sleepiness reaches 100 at ~1.6× this
+  sleepCycleMinutes: number;           // typical nap/sleep cycle length
+  nightStretchMinutes: number;         // longest night stretch before natural waking (if not hungry)
+  hungerWakeDay: number; hungerWakeNight: number; // sleeping baby wakes when hunger passes these
+}> = {
+  newborn:       { hungerFullToStarvingMinutes: 150, nightHungerFactor: 0.9, wakeWindowMinutes: 70,  sleepCycleMinutes: 50, nightStretchMinutes: 180, hungerWakeDay: 75, hungerWakeNight: 70 },
+  social_infant: { hungerFullToStarvingMinutes: 190, nightHungerFactor: 0.7, wakeWindowMinutes: 100, sleepCycleMinutes: 60, nightStretchMinutes: 300, hungerWakeDay: 80, hungerWakeNight: 85 },
+  infant_4_6mo:  { hungerFullToStarvingMinutes: 230, nightHungerFactor: 0.55, wakeWindowMinutes: 135, sleepCycleMinutes: 60, nightStretchMinutes: 480, hungerWakeDay: 80, hungerWakeNight: 90 }
+};
+
+export const SOLIDS_MIN_AGE_DAYS = 180; // "around 6 months" (WHO)
 
 export class SimulationEngine {
   /**
@@ -86,29 +110,35 @@ export class SimulationEngine {
     const currentHour = simDate.getHours();
     const isNighttime = isNighttimeHour(currentHour, settings);
 
-    // 1. Calculate Age in Days, Developmental Stage & Growth
-    const ageDays = Math.max(0, Math.floor((simTime - baby.birthTimestamp) / (24 * 60 * 60 * 1000)));
+    // 1. Developmental age (compressed clock), stage & growth
+    nextBaby.developmentalAgeDays = advanceDevelopmentalAge(
+      baby.developmentalAgeDays ?? 0,
+      deltaSimulatedMs,
+      settings.compressionSchedule || DEFAULT_COMPRESSION_SCHEDULE
+    );
+    const ageDays = getDevelopmentalAgeDays(nextBaby);
     const stage = SimulationEngine.getDevelopmentalStage(ageDays);
+    const tune = STAGE_TUNING[stage];
     
     // Growth is a smooth simulation heuristic (roughly 25 g/day in the first ~3 months, ~17 g/day after; ~0.09 cm/day).
     // Not a growth chart. Real growth is assessed by health professionals.
-    const gramsPerDay = ageDays < 90 ? 25 : 17;
-    const gainedGrams = ageDays < 90 ? ageDays * 25 : (90 * 25) + ((ageDays - 90) * 17);
-    const fractionalDayGain = (deltaMinutes / (24 * 60)) * gramsPerDay;
-    nextBaby.currentWeightGrams = Math.round(baby.birthWeightGrams + gainedGrams + fractionalDayGain);
-    nextBaby.currentLengthCm = parseFloat((baby.birthLengthCm + (ageDays * 0.09)).toFixed(1));
+    // Uses developmental age so growth follows the compressed journey (~+4.5 kg and ~+16 cm by 6 months, near WHO medians).
+    const devAge = nextBaby.developmentalAgeDays;
+    const gainedGrams = devAge < 90 ? devAge * 30 : (90 * 30) + ((devAge - 90) * 18);
+    nextBaby.currentWeightGrams = Math.round(baby.birthWeightGrams + gainedGrams);
+    nextBaby.currentLengthCm = parseFloat((baby.birthLengthCm + (devAge * 0.088)).toFixed(1));
 
     // Bounded 4-month sleep regression window (days 120 to 134, lasting 2 weeks)
     const isSleepRegression = stage === 'infant_4_6mo' && ageDays >= 120 && ageDays <= 134;
 
     // 2. Hunger Progression (Milk & Complementary Solids)
-    // Milk hunger progression (every 2-3.5 hours depending on stage)
-    const baseHungerMinutes = stage === 'infant_4_6mo' ? 200 : stage === 'social_infant' ? 180 : 150;
-    const hungerRatePerMinute = (100 / (baseHungerMinutes * tempConfig.hungerToleranceMultiplier)) * diffMultiplier;
+    // Milk hunger progression: stage × temperament × difficulty, slower during night sleep
+    const nightSleepFactor = (isNighttime && nextState.isSleeping) ? tune.nightHungerFactor : 1;
+    const hungerRatePerMinute = (100 / (tune.hungerFullToStarvingMinutes * tempConfig.hungerToleranceMultiplier)) * diffMultiplier * nightSleepFactor;
     nextState.hunger = Math.min(100, Math.max(0, nextState.hunger + (hungerRatePerMinute * deltaMinutes)));
 
-    // Solid food appetite progression in 4-6 month stage (alongside, not replacing milk)
-    if (stage === 'infant_4_6mo') {
+    // Interest in solids only around 6 months (WHO), alongside milk
+    if (ageDays >= SOLIDS_MIN_AGE_DAYS) {
       nextState.solidFoodHunger = nextState.solidFoodHunger ?? 0;
       const solidFoodRatePerMinute = (100 / 360) * diffMultiplier; // ~6 hours
       nextState.solidFoodHunger = Math.min(100, Math.max(0, nextState.solidFoodHunger + (solidFoodRatePerMinute * deltaMinutes)));
@@ -121,49 +151,31 @@ export class SimulationEngine {
       nextState.sleepMinutesElapsed += deltaMinutes;
       nextState.awakeMinutesElapsed = 0;
 
-      // Restorative sleep reduces sleepiness
-      const sleepCycleFactor = stage === 'infant_4_6mo' ? 2.0 : stage === 'social_infant' ? 1.75 : 1.5;
-      const sleepRecoveryRate = 100 / (tempConfig.sleepCycleDurationMinutes * sleepCycleFactor);
+      // Restorative sleep: a full recovery takes about two sleep cycles
+      const sleepRecoveryRate = 100 / (tune.sleepCycleMinutes * 2);
       nextState.sleepiness = Math.max(0, nextState.sleepiness - (sleepRecoveryRate * deltaMinutes));
 
-      // Wake up conditions tailored by daytime vs nighttime and developmental stage
-      let naturalCycleMinutes = tempConfig.sleepCycleDurationMinutes;
-      let hungerWakeThreshold = 70;
-      let diaperWakeThreshold = 75;
-      let gasWakeThreshold = 70;
+      const cycleMinutes = tune.sleepCycleMinutes * (tempConfig.sleepCycleDurationMinutes / 50); // temperament scales cycle length
+      const hungerWakeThreshold = isNighttime ? tune.hungerWakeNight : tune.hungerWakeDay;
+      const diaperWakeThreshold = isNighttime ? 75 : 70;
+      const gasWakeThreshold = isNighttime ? 65 : 60;
 
-      if (isNighttime) {
-        // Nighttime biological patterns: higher waking sensitivity to hunger and shorter cycle transitions
-        if (stage === 'newborn') {
-          naturalCycleMinutes = tempConfig.sleepCycleDurationMinutes * 0.85; // ~45-55m active sleep transitions
-          hungerWakeThreshold = 45; // Newborns cannot sleep through hunger
-          diaperWakeThreshold = 60;
-          gasWakeThreshold = 50;
-        } else if (stage === 'social_infant') {
-          naturalCycleMinutes = tempConfig.sleepCycleDurationMinutes * 1.1; // ~60-80m cycles
-          hungerWakeThreshold = 55;
-          diaperWakeThreshold = 65;
-          gasWakeThreshold = 55;
-        } else {
-          // 4-6 month infant
-          naturalCycleMinutes = isSleepRegression 
-            ? tempConfig.sleepCycleDurationMinutes * 0.75 // 4-month sleep leap fragments nocturnal cycles
-            : tempConfig.sleepCycleDurationMinutes * 1.6; // Longer consolidated nocturnal stretches
-          hungerWakeThreshold = isSleepRegression ? 50 : 65;
-          diaperWakeThreshold = 70;
-          gasWakeThreshold = 60;
-        }
-      }
+      // Natural waking: at the end of a cycle, if rested enough, the baby may wake (chance grows with restedness).
+      // At night, longer consolidated stretches are possible for older babies.
+      const atCycleBoundary = Math.floor(nextState.sleepMinutesElapsed / cycleMinutes) > Math.floor((nextState.sleepMinutesElapsed - deltaMinutes) / cycleMinutes);
+      const maxStretch = isNighttime ? tune.nightStretchMinutes : tune.sleepCycleMinutes * 3;
+      const restedness = Math.max(0, (40 - nextState.sleepiness) / 40); // 0 when sleepiness ≥ 40, 1 when fully rested
+      const regressionPenalty = isSleepRegression ? 0.35 : 0;
+      // Daytime naps end readily once rested; at night, babies mostly link cycles until hungry or the stretch is used up
+      const nightBase = stage === 'newborn' ? 0.08 : stage === 'social_infant' ? 0.05 : 0.03;
+      const wakeChance = isNighttime ? (nightBase + restedness * 0.12 + regressionPenalty) : (0.25 + restedness * 0.6 + regressionPenalty);
+      const naturalWake = atCycleBoundary && (Math.random() < wakeChance || nextState.sleepMinutesElapsed >= maxStretch);
 
-      const naturalWakeThreshold = nextState.sleepMinutesElapsed > naturalCycleMinutes;
-      const distressWakeThreshold = nextState.hunger > hungerWakeThreshold || 
-                                    nextState.diaperSoiled > diaperWakeThreshold || 
-                                    nextState.gasDiscomfort > gasWakeThreshold;
+      const distressWake = nextState.hunger > hungerWakeThreshold ||
+                           nextState.diaperSoiled > diaperWakeThreshold ||
+                           nextState.gasDiscomfort > gasWakeThreshold;
 
-      // Sleep regression light sleep transitions
-      const regressionWake = isSleepRegression && nextState.sleepMinutesElapsed > 35 && nextState.sleepiness < 45 && Math.random() < (0.015 * deltaMinutes);
-
-      if ((naturalWakeThreshold && nextState.sleepiness < 15) || distressWakeThreshold || regressionWake) {
+      if (naturalWake || distressWake) {
         nextState.isSleeping = false;
         nextState.sleepMinutesElapsed = 0;
         nextState.awakeMinutesElapsed = 1;
@@ -179,9 +191,9 @@ export class SimulationEngine {
               timestamp: simTime,
               dayNumber: ageDays,
               type: isSleepRegression ? 'sleep_regression' : 'night_waking',
-              title: isSleepRegression ? '4-Month Sleep Regression Awakening' : 'Nighttime Awakening',
               source: 'system',
-              description: isSleepRegression 
+              title: isSleepRegression ? 'A rough night' : 'Night waking',
+              description: isSleepRegression
                 ? `${baby.name} woke between sleep cycles during a rough patch of sleep.`
                 : `${baby.name} woke up at night (${new Date(simTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}) and needs you.`,
               educationalNote: isSleepRegression ? EVENT_NOTES.sleep_regression.body : EVENT_NOTES.night_waking.body,
@@ -195,20 +207,18 @@ export class SimulationEngine {
       nextState.awakeMinutesElapsed += deltaMinutes;
       nextState.sleepMinutesElapsed = 0;
 
-      // Safe Wake Windows based on Developmental Stage:
-      // Newborn (0-8w): 45-75m (~65m)
-      // Social Infant (8-17w): 90-120m (~105m)
-      // 4-6 Month Infant (17-26w): 120-150m (~135m)
-      let maxWakeWindowMinutes = 65;
-      if (stage === 'social_infant') {
-        maxWakeWindowMinutes = 105;
-      } else if (stage === 'infant_4_6mo') {
-        maxWakeWindowMinutes = 135;
+      // At night a comfortable, fed baby may drift back to sleep on their own (more likely as they get older)
+      if (isNighttime && nextState.comfort > 70 && nextState.hunger < 50 && nextState.awakeMinutesElapsed > 10) {
+        const selfSettlePerMinute = stage === 'newborn' ? 0.015 : stage === 'social_infant' ? 0.025 : 0.035;
+        if (Math.random() < selfSettlePerMinute * deltaMinutes) {
+          nextState.isSleeping = true;
+          nextState.sleepMinutesElapsed = 0;
+        }
       }
 
-      // During sleep regression, fatigue accumulates temporarily faster
-      const regressionFatigueMultiplier = isSleepRegression ? 1.25 : 1.0;
-      const fatigueRate = (100 / maxWakeWindowMinutes) * (settings.difficulty === 'hardcore' ? 1.2 : 1.0) * regressionFatigueMultiplier;
+      // Sleepiness reaches 100 at ~1.6× the comfortable wake window (over-tired territory beyond the window)
+      const regressionFatigueMultiplier = isSleepRegression ? 1.2 : 1.0;
+      const fatigueRate = (100 / (tune.wakeWindowMinutes * 1.6)) * (settings.difficulty === 'hardcore' ? 1.15 : 1.0) * regressionFatigueMultiplier;
       nextState.sleepiness = Math.min(100, Math.max(0, nextState.sleepiness + (fatigueRate * deltaMinutes)));
 
       // Chance-based 'Rolls Over' event for 4-6 Month Stage
@@ -229,14 +239,9 @@ export class SimulationEngine {
             resolvedAt: simTime
           });
 
-          // Also unlock the rolls_over milestone if present
           const rollMilestoneIdx = updatedMilestones.findIndex(m => m.id === 'rolls_over');
           if (rollMilestoneIdx !== -1 && !updatedMilestones[rollMilestoneIdx].unlocked) {
-            updatedMilestones[rollMilestoneIdx] = {
-              ...updatedMilestones[rollMilestoneIdx],
-              unlocked: true,
-              unlockedAtTimestamp: simTime
-            };
+            updatedMilestones[rollMilestoneIdx] = { ...updatedMilestones[rollMilestoneIdx], unlocked: true, unlockedAtTimestamp: simTime };
           }
         }
       }
@@ -279,40 +284,37 @@ export class SimulationEngine {
     }
 
     // 6. Comfort Calculation
-    const hungerPenalty = Math.max(0, (nextState.hunger - 40) * 1.3);
-    const solidFoodPenalty = (stage === 'infant_4_6mo' && (nextState.solidFoodHunger || 0) > 60) ? ((nextState.solidFoodHunger || 0) - 60) * 0.4 : 0;
-    const diaperPenalty = Math.max(0, (nextState.diaperSoiled - 40) * 1.0);
-    const gasPenalty = nextState.gasDiscomfort * 0.9;
-    const overtiredPenalty = nextState.sleepiness > 80 && !nextState.isSleeping ? (nextState.sleepiness - 80) * 2.0 : 0;
+    // Comfort: a content baby tolerates mild hunger/tiredness; distress ramps once needs are clearly unmet
+    const hungerPenalty = Math.max(0, (nextState.hunger - 55) * 1.6);
+    const solidFoodPenalty = (ageDays >= SOLIDS_MIN_AGE_DAYS && (nextState.solidFoodHunger || 0) > 60) ? ((nextState.solidFoodHunger || 0) - 60) * 0.3 : 0;
+    const diaperPenalty = Math.max(0, (nextState.diaperSoiled - 45) * 0.9);
+    const gasPenalty = Math.max(0, (nextState.gasDiscomfort - 20) * 0.8);
+    const overtiredPenalty = nextState.sleepiness > 70 && !nextState.isSleeping ? (nextState.sleepiness - 70) * 1.8 : 0;
     
     const totalDistress = hungerPenalty + solidFoodPenalty + diaperPenalty + gasPenalty + overtiredPenalty;
     nextState.comfort = Math.max(0, Math.min(100, 100 - totalDistress));
 
-    // 7. Mood & Alert/Social State Evaluation
+    // 7. Mood is derived from comfort (and, when content, from tiredness/hunger). Never randomised.
     let calculatedMood: BabyMood = 'quiet_alert';
 
     if (nextState.isSleeping) {
       calculatedMood = nextState.comfort > 60 ? 'sleeping_deep' : 'sleeping_light';
       nextState.cryingMinutesContinuous = 0;
-    } else {
-      // Social infant & 4-6mo infant are more easily playful and alert
+    } else if (nextState.comfort > 70) {
       const playThreshold = stage !== 'newborn' ? 65 : 75;
-      if (nextState.comfort > playThreshold && nextState.hunger < 45 && nextState.sleepiness < 60) {
-        calculatedMood = (nextState.awakeMinutesElapsed > 10 || stage !== 'newborn') ? 'playful' : 'quiet_alert';
-        nextState.cryingMinutesContinuous = 0;
-      } else if (nextState.comfort > 50 && nextState.sleepiness > 70) {
-        calculatedMood = 'drowsy';
-        nextState.cryingMinutesContinuous = 0;
-      } else if (nextState.comfort <= 50 && nextState.comfort > 25) {
-        calculatedMood = 'fussy';
-        nextState.cryingMinutesContinuous += deltaMinutes;
-      } else if (nextState.comfort <= 25 && nextState.comfort > 10) {
-        calculatedMood = 'active_crying';
-        nextState.cryingMinutesContinuous += deltaMinutes;
-      } else {
-        calculatedMood = 'inconsolable';
-        nextState.cryingMinutesContinuous += deltaMinutes;
-      }
+      if (nextState.sleepiness > 65) calculatedMood = 'drowsy';
+      else if (nextState.comfort > playThreshold && nextState.hunger < 50 && nextState.sleepiness < 55 && (nextState.awakeMinutesElapsed > 10 || stage !== 'newborn')) calculatedMood = 'playful';
+      else calculatedMood = 'quiet_alert';
+      nextState.cryingMinutesContinuous = 0;
+    } else if (nextState.comfort > 45) {
+      calculatedMood = 'fussy';
+      nextState.cryingMinutesContinuous += deltaMinutes * 0.5; // grizzling, not full crying
+    } else if (nextState.comfort > 20) {
+      calculatedMood = 'active_crying';
+      nextState.cryingMinutesContinuous += deltaMinutes;
+    } else {
+      calculatedMood = 'inconsolable';
+      nextState.cryingMinutesContinuous += deltaMinutes;
     }
     nextState.mood = calculatedMood;
 
@@ -442,7 +444,7 @@ export class SimulationEngine {
     let nextParents = parents.map(p => ({ ...p }));
     const simTime = settings.simulatedTimeMs;
     const tempConfig = TEMPERAMENTS[baby.temperament] || TEMPERAMENTS.easygoing;
-    const ageDays = Math.max(0, Math.floor((simTime - baby.birthTimestamp) / (24 * 60 * 60 * 1000)));
+    const ageDays = getDevelopmentalAgeDays(baby);
     const stage = SimulationEngine.getDevelopmentalStage(ageDays);
 
     let effectiveness: 'excellent' | 'moderate' | 'ineffective' = 'moderate';
@@ -486,8 +488,8 @@ export class SimulationEngine {
       }
 
       case 'feed_solids': {
-        if (stage !== 'infant_4_6mo') {
-          feedback = `${baby.name} is only ${ageDays} days old. In this simulation solids are not offered before the 4–6 month stage.`;
+        if (ageDays < SOLIDS_MIN_AGE_DAYS) {
+          feedback = `${baby.name} is not six months old yet. In this simulation solids are not offered before then.`;
           effectiveness = 'ineffective';
         } else {
           const reduction = Math.min(nextState.hunger, 35);
@@ -542,7 +544,7 @@ export class SimulationEngine {
         nextState.cryingMinutesContinuous = Math.max(0, nextState.cryingMinutesContinuous - 5);
 
         // If very sleepy and comfortable, might drift to sleep
-        if (nextState.sleepiness > 65 && nextState.hunger < 50 && nextState.gasDiscomfort < 40) {
+        if (nextState.sleepiness > 55 && nextState.hunger < 55 && nextState.gasDiscomfort < 40) {
           nextState.isSleeping = true;
           nextState.sleepMinutesElapsed = 0;
           nextState.mood = 'sleeping_light';

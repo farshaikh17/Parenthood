@@ -17,6 +17,8 @@ import {
 import { SimulationEngine, makeId } from './engine';
 import { accumulateAction, accumulateTick } from './dayLog';
 import { EVENT_NOTES } from '../content/copy';
+import { isNighttimeHour } from './engine';
+import { advanceDevelopmentalAge, DEFAULT_COMPRESSION_SCHEDULE } from './clock';
 
 /**
  * AWAY POLICY (product decision: Option B)
@@ -59,11 +61,15 @@ export const AUTOPILOT_DEFAULTS = {
   minGapMinutes: 12
 };
 
-export function computeElapsedSimMs(settings: SimulationSettings, nowRealMs: number): number {
+export function computeRawElapsedSimMs(settings: SimulationSettings, nowRealMs: number): number {
   const lastReal = settings.lastRealTimestampMs ?? nowRealMs;
   const elapsedRealMs = Math.max(0, nowRealMs - lastReal);
   if (elapsedRealMs < 3000 || settings.isPaused) return 0;
-  const raw = elapsedRealMs * (settings.timeSpeed || 1);
+  return elapsedRealMs * (settings.timeSpeed || 1);
+}
+
+export function computeElapsedSimMs(settings: SimulationSettings, nowRealMs: number): number {
+  const raw = computeRawElapsedSimMs(settings, nowRealMs);
   const cap = (settings.awayCatchupMaxSimHours ?? 24) * 60 * 60 * 1000;
   return Math.min(raw, cap);
 }
@@ -73,6 +79,10 @@ export function runAwayCatchup(input: AwayCatchupInput, nowRealMs: number): Away
   if (totalSimMs <= 0) {
     return { ...input, processedSimMs: 0, autopilotSummary: null };
   }
+  // Beyond the cap we don't simulate every minute, but the baby still grew and the clock still moved:
+  // developmental age and the care clock advance for the skipped stretch so the journey stays on schedule.
+  const rawSimMs = computeRawElapsedSimMs(input.settings, nowRealMs);
+  const skippedMs = Math.max(0, rawSimMs - totalSimMs);
 
   const cfg = AUTOPILOT_DEFAULTS;
   const autopilotOn = input.settings.awayAutopilotEnabled !== false;
@@ -86,6 +96,10 @@ export function runAwayCatchup(input: AwayCatchupInput, nowRealMs: number): Away
   let milestones = input.milestones;
   let dayLogs = input.dayLogs;
   let settings = { ...input.settings };
+  if (skippedMs > 0) {
+    baby = { ...baby, developmentalAgeDays: advanceDevelopmentalAge(baby.developmentalAgeDays ?? 0, skippedMs, settings.compressionSchedule || DEFAULT_COMPRESSION_SCHEDULE) };
+    settings = { ...settings, simulatedTimeMs: settings.simulatedTimeMs + skippedMs };
+  }
 
   const stepMs = 5 * 60 * 1000; // 5 simulated minutes per step
   let processed = 0;
@@ -153,7 +167,8 @@ export function runAwayCatchup(input: AwayCatchupInput, nowRealMs: number): Away
         dayLogs = accumulateAction(dayLogs, ageDays, burped.record);
         summary.burps++;
       }
-      if (!state.isSleeping && state.sleepiness > 50) {
+      const nightNow = isNighttimeHour(new Date(settings.simulatedTimeMs).getHours(), settings);
+      if (!state.isSleeping && (state.sleepiness > 50 || nightNow)) {
         const settled = SimulationEngine.applyAction('cuddle', baby, state, parents, activeParentId, settings, {}, { source: 'autopilot' });
         state = settled.nextState;
         parents = settled.nextParents;
@@ -191,7 +206,10 @@ export function runAwayCatchup(input: AwayCatchupInput, nowRealMs: number): Away
   const who = isTwoParent
     ? `${parents.find(p => p.id !== activeParentId)?.name || 'Your partner'} (simulated)`
     : 'Simulated baseline care';
-  const hoursLabel = awayHours >= 1 ? `${awayHours.toFixed(1)} simulated hours` : `${Math.round(awayHours * 60)} simulated minutes`;
+  const skippedDays = skippedMs / 86400000;
+  const hoursLabel = skippedDays >= 1
+    ? `About ${Math.round(skippedDays + awayHours / 24)} days`
+    : awayHours >= 1 ? `${awayHours.toFixed(1)} hours` : `${Math.round(awayHours * 60)} minutes`;
   const summaryEvent: SimulationEvent = {
     id: makeId('away', settings.simulatedTimeMs),
     timestamp: settings.simulatedTimeMs,
@@ -200,7 +218,7 @@ export function runAwayCatchup(input: AwayCatchupInput, nowRealMs: number): Away
     source: 'autopilot',
     title: 'While you were away',
     description: autopilotOn
-      ? `${hoursLabel} passed. ${who} handled ${summary.feeds} feed${summary.feeds === 1 ? '' : 's'}, ${summary.changes} nappy change${summary.changes === 1 ? '' : 's'}, ${summary.burps} burp${summary.burps === 1 ? '' : 's'} and ${summary.settles} settle${summary.settles === 1 ? '' : 's'}. ${baby.name} is yours again now.`
+      ? `${hoursLabel} passed.${skippedDays >= 1 ? ' Only the last day is shown in detail.' : ''} ${who} handled ${summary.feeds} feed${summary.feeds === 1 ? '' : 's'}, ${summary.changes} nappy change${summary.changes === 1 ? '' : 's'}, ${summary.burps} burp${summary.burps === 1 ? '' : 's'} and ${summary.settles} settle${summary.settles === 1 ? '' : 's'}. ${baby.name} is yours again now.`
       : `${hoursLabel} passed with no care while you were away.`,
     educationalNote: EVENT_NOTES.away_summary.body,
     severity: 'info',

@@ -5,114 +5,9 @@
 
 import { describe, it, expect } from 'vitest';
 import { SimulationEngine, getDevelopmentalStage } from './engine';
-import { 
-  Baby, 
-  BabyState, 
-  Parent, 
-  SimulationSettings, 
-  SimulationEvent, 
-  UserProfile 
-} from '../types';
+import { Parent, SimulationEvent } from '../types';
 import { INITIAL_MILESTONES } from './initialData';
-
-export function createMockBaby(overrides: Partial<Baby> = {}): Baby {
-  return {
-    id: 'test_baby',
-    name: 'Leo',
-    sex: 'boy',
-    birthTimestamp: 1700000000000,
-    birthWeightGrams: 3400,
-    birthLengthCm: 50.8,
-    currentWeightGrams: 3400,
-    currentLengthCm: 50.8,
-    temperament: 'easygoing',
-    ...overrides,
-  };
-}
-
-export function createMockState(overrides: Partial<BabyState> = {}): BabyState {
-  return {
-    hunger: 20,
-    sleepiness: 20,
-    diaperSoiled: 0,
-    diaperType: 'clean',
-    gasDiscomfort: 0,
-    comfort: 90,
-    energy: 90,
-    isSleeping: false,
-    sleepMinutesElapsed: 0,
-    awakeMinutesElapsed: 10,
-    healthState: 'healthy',
-    mood: 'quiet_alert',
-    lastFedTimestamp: 1700000000000,
-    lastDiaperTimestamp: 1700000000000,
-    lastBurpedTimestamp: 1700000000000,
-    lastSootherTimestamp: 1700000000000,
-    lastTummyTimeTimestamp: 1700000000000,
-    cryingMinutesContinuous: 0,
-    ...overrides,
-  };
-}
-
-export function createMockParents(): Parent[] {
-  return [
-    {
-      id: 'parent_1',
-      name: 'Alex',
-      role: 'primary',
-      workStatus: 'parental_leave',
-      stressLevel: 30,
-      energy: 80,
-      sleepDebtHours: 1.0,
-      confidence: 70,
-      knowledgeScore: 60,
-    },
-    {
-      id: 'parent_2',
-      name: 'Jordan',
-      role: 'secondary',
-      workStatus: 'full_time',
-      stressLevel: 35,
-      energy: 75,
-      sleepDebtHours: 1.5,
-      confidence: 65,
-      knowledgeScore: 55,
-    },
-  ];
-}
-
-export function createMockSettings(overrides: Partial<SimulationSettings> = {}): SimulationSettings {
-  return {
-    timeSpeed: 1,
-    isPaused: false,
-    difficulty: 'realistic',
-    nighttimeAlertsEnabled: false,
-    nighttimeQuietStartHour: 22,
-    nighttimeQuietEndHour: 7,
-    soundEffectsEnabled: true,
-    simulatedTimeMs: 1700000000000 + 3600000 * 12, // 12:00 PM
-    lastRealTimestampMs: Date.now(),
-    unitSystem: 'imperial',
-    developerMode: false,
-    awayAutopilotEnabled: true,
-    awayCatchupMaxSimHours: 24,
-    ...overrides,
-  };
-}
-
-export function createMockUserProfile(overrides: Partial<UserProfile> = {}): UserProfile {
-  return {
-    id: 'user_1',
-    motivation: 'planning_children',
-    householdType: 'two_parent',
-    primaryParentName: 'Alex',
-    partnerName: 'Jordan',
-    onboardingCompleted: true,
-    activeParentId: 'parent_1',
-    createdAt: 1700000000000,
-    ...overrides,
-  };
-}
+import { createMockBaby, createMockState, createMockParents, createMockSettings, createMockUserProfile } from './testUtils';
 
 describe('SimulationEngine', () => {
   describe('SimulationEngine.tick()', () => {
@@ -210,7 +105,7 @@ describe('SimulationEngine', () => {
       const sleepingHungryState = createMockState({ 
         isSleeping: true, 
         sleepMinutesElapsed: 30,
-        hunger: 72,
+        hunger: 80,
         sleepiness: 30 
       });
       const parents = createMockParents();
@@ -444,7 +339,7 @@ describe('SimulationEngine', () => {
 
     it('social_infant stage has wider safe wake windows (slower sleepiness build-up) than newborn', () => {
       const newbornBaby = createMockBaby({ birthTimestamp: 1700000000000 });
-      const socialBaby = createMockBaby({ birthTimestamp: 1700000000000 - (70 * 24 * 60 * 60 * 1000) }); // 70 days old
+      const socialBaby = createMockBaby({ developmentalAgeDays: 70 }); // 70 days old
       const state = createMockState({ hunger: 10, sleepiness: 10, isSleeping: false });
       const parents = createMockParents();
       const settings = createMockSettings({ simulatedTimeMs: 1700000000000 });
@@ -457,7 +352,7 @@ describe('SimulationEngine', () => {
     });
 
     it('infant_4_6mo stage introduces solidFoodHunger accumulation alongside milk feeding', () => {
-      const infantBaby = createMockBaby({ birthTimestamp: 1700000000000 - (140 * 24 * 60 * 60 * 1000) }); // 140 days old (20 weeks)
+      const infantBaby = createMockBaby({ developmentalAgeDays: 181 }); // ~6 months: solids interest begins
       const state = createMockState({ hunger: 20, solidFoodHunger: 10, isSleeping: false });
       const parents = createMockParents();
       const settings = createMockSettings({ simulatedTimeMs: 1700000000000 });
@@ -470,7 +365,7 @@ describe('SimulationEngine', () => {
     });
 
     it('feed_solids action reduces solidFoodHunger and unlocks first_solid_food milestone', () => {
-      const infantBaby = createMockBaby({ birthTimestamp: 1700000000000 - (140 * 24 * 60 * 60 * 1000) });
+      const infantBaby = createMockBaby({ developmentalAgeDays: 181 });
       const state = createMockState({ hunger: 50, solidFoodHunger: 75, comfort: 60 });
       const parents = createMockParents();
       const settings = createMockSettings({ simulatedTimeMs: 1700000000000 });
@@ -484,7 +379,7 @@ describe('SimulationEngine', () => {
     });
 
     it('unlocks developmental stage entry milestones during tick', () => {
-      const socialBaby = createMockBaby({ birthTimestamp: 1700000000000 - (60 * 24 * 60 * 60 * 1000) }); // 60 days
+      const socialBaby = createMockBaby({ developmentalAgeDays: 60 }); // 60 days
       const state = createMockState();
       const parents = createMockParents();
       const settings = createMockSettings({ simulatedTimeMs: 1700000000000 });
@@ -500,12 +395,12 @@ describe('SimulationEngine', () => {
       // 11:30 PM (23:30) timestamp
       const nightDate = new Date(2026, 0, 15, 23, 30, 0);
       const simTime = nightDate.getTime();
-      const newbornBaby = createMockBaby({ birthTimestamp: simTime - (7 * 24 * 60 * 60 * 1000) }); // 7 days old
-      // Newborn sleeping with hunger approaching nighttime threshold (>45)
+      const newbornBaby = createMockBaby({ developmentalAgeDays: 7, birthTimestamp: simTime - (7 * 24 * 60 * 60 * 1000) }); // 7 days old
+      // Newborn sleeping with hunger just under the nighttime wake threshold (70); the tick pushes it over
       const state = createMockState({
         isSleeping: true,
         sleepMinutesElapsed: 30,
-        hunger: 48,
+        hunger: 69,
         sleepiness: 30
       });
       const parents = createMockParents();

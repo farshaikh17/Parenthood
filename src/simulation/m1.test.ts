@@ -10,7 +10,7 @@ import { SimulationEngine, isNighttimeHour } from './engine';
 import { INITIAL_MILESTONES } from './initialData';
 import { loadSavedAppData, saveAppData, MAX_EVENTS, getDefaultSettings } from './storage';
 import { formatWeight, formatLength, formatVolume, lbsOzToGrams, gramsToLbsOz, feedSliderConfig } from '../utils/units';
-import { createMockBaby, createMockState, createMockParents, createMockSettings, createMockUserProfile } from './engine.test';
+import { createMockBaby, createMockState, createMockParents, createMockSettings, createMockUserProfile } from './testUtils';
 import { SimulationEvent } from '../types';
 
 // Minimal localStorage shim for storage tests

@@ -49,7 +49,7 @@ export function accumulateTick(
 ): DayLog[] {
   const log = { ...getDayLog(logs, dayNumber) };
   if (nextState.isSleeping) log.sleepMinutes += deltaMinutes;
-  if (!nextState.isSleeping && (nextState.mood === 'fussy' || nextState.mood === 'active_crying' || nextState.mood === 'inconsolable')) {
+  if (!nextState.isSleeping && (nextState.mood === 'active_crying' || nextState.mood === 'inconsolable')) {
     log.cryingMinutes += deltaMinutes;
   }
   log.nightWakings += newEvents.filter(e => e.type === 'night_waking' || e.type === 'sleep_regression').length;
