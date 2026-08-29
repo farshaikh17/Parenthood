@@ -23,6 +23,7 @@ export interface Env {
   VAPID_PRIVATE_KEY: string; // secret (wrangler secret put VAPID_PRIVATE_KEY)
   VAPID_SUBJECT: string;
   ALLOWED_ORIGINS: string;
+  GEMINI_API_KEY?: string; // secret; optional — without it the AI endpoints answer with factual fallbacks
 }
 
 interface PushSubscriptionJSON {
@@ -133,6 +134,76 @@ async function sendPush(sub: PushSubscriptionJSON, alert: ScheduledAlert, env: E
     body: body as BufferSource
   });
   return { ok: res.ok, gone: res.status === 404 || res.status === 410 };
+}
+
+// ---------- Gemini (same contract as server.ts, so the static site on Pages can use the Worker) ----------
+
+async function gemini(env: Env, prompt: string, json: boolean): Promise<string | null> {
+  if (!env.GEMINI_API_KEY) return null;
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: json ? { responseMimeType: 'application/json' } : {} })
+    });
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? '';
+    return typeof text === 'string' && text.trim() ? text.trim() : null;
+  } catch { return null; }
+}
+
+async function journalReflection(body: any, env: Env) {
+  const { babyName, ageDays, careDay, temperament, caregivers, dayStats, events, actions, milestonesToday, memory, parentNote } = body || {};
+  const stats = dayStats || {};
+  const fallback = { reflection: `Day ${careDay ?? ageDays}: ${stats.feedsCount ?? 0} feeds, ${stats.diapersCount ?? 0} nappy changes, about ${stats.sleepHoursTotal ?? 0} hours of sleep and ${stats.cryingMinutesTotal ?? 0} minutes of crying.`, milestoneInsight: '', source: 'offline_fallback' };
+  const prompt = `You write the daily journal for "Parenthood", an educational baby-care simulation.
+Write in the voice of an observant caregiver describing ${babyName}'s day (NOT the baby speaking; a ${ageDays}-day-old cannot narrate thoughts).
+Use ONLY the facts below. Do not invent feeds, sleep, crying, milestones, illnesses, or parent actions that are not listed.
+If the log is sparse, say the day was quiet. No medical claims, no diagnoses, no "research shows". 60-100 words, warm but plain.
+
+FACTS
+Baby: ${babyName}, developmental age ${ageDays} days (this is day ${careDay ?? '?'} of the parents caring for them), temperament parameters: ${temperament}
+Caregivers: ${JSON.stringify(caregivers || [])}
+Day counters (authoritative): ${JSON.stringify(stats)}
+Events today: ${JSON.stringify(events || [])}
+Care actions today (by = who did it; "autopilot" means simulated care while the user was away): ${JSON.stringify(actions || [])}
+Milestones reached today: ${JSON.stringify(milestonesToday || [])}
+What the baby has learned so far (facts from records; you may mention them, never extend them): ${JSON.stringify(memory || [])}
+Parent's own note (quote or paraphrase only if present): ${parentNote ? JSON.stringify(parentNote) : 'none'}
+
+Respond in valid JSON: {"reflection": string, "milestoneInsight": string}
+"milestoneInsight" must be ONE short, cautious, non-medical sentence about something that actually happened today, or an empty string.`;
+  const text = await gemini(env, prompt, true);
+  if (!text) return fallback;
+  try {
+    const parsed = JSON.parse(text);
+    if (typeof parsed.reflection !== 'string' || parsed.reflection.length < 10) return fallback;
+    return { reflection: parsed.reflection, milestoneInsight: typeof parsed.milestoneInsight === 'string' ? parsed.milestoneInsight : '', source: 'gemini' };
+  } catch { return fallback; }
+}
+
+async function explainEvent(body: any, env: Env) {
+  const { event, snapshot, staticNote, question } = body || {};
+  const factual = () => {
+    if (!snapshot) return staticNote || 'No detail was recorded for this event.';
+    const reasons: string[] = [];
+    if (snapshot.hunger >= 60) reasons.push(`hunger was high (${snapshot.hunger}/100, last feed ${snapshot.minutesSinceFeed} min earlier)`);
+    if (snapshot.gasDiscomfort >= 40) reasons.push(`there was trapped wind (${snapshot.gasDiscomfort}/100)`);
+    if (snapshot.diaperSoiled >= 50) reasons.push(`the nappy was ${snapshot.diaperType} (${snapshot.minutesSinceDiaper} min since a change)`);
+    if (!snapshot.isSleeping && snapshot.sleepiness >= 65) reasons.push(`they had been awake ${snapshot.awakeMinutes} min and were over-tired (${snapshot.sleepiness}/100)`);
+    if (reasons.length === 0) reasons.push(`no single need stood out — comfort was ${snapshot.comfort}/100 and it was ${snapshot.isNight ? 'night' : 'daytime'}`);
+    return `In the simulation at that moment: ${reasons.join('; ')}.`;
+  };
+  const prompt = `You explain events inside "Parenthood", an educational baby-care SIMULATION, to the parent.
+Event: ${JSON.stringify(event || {})}
+Simulation state at that moment (the ONLY facts you may use): ${JSON.stringify(snapshot || {})}
+Simulation note already shown to the user: ${JSON.stringify(staticNote || '')}
+Parent's question: ${question || 'Why did this happen?'}
+
+Write 2-3 plain sentences saying which values in the state most likely caused the event (hunger, awake time/over-tiredness, wind after a feed, nappy). Quote the numbers you rely on. If nothing stands out, say so honestly. Do not give medical advice, do not diagnose, do not cite studies or organisations, do not say "evidence-based". You may end with one cautious sentence that real babies vary. Plain text only.`;
+  const text = await gemini(env, prompt, false);
+  return { insight: text && text.length > 20 ? text : factual(), source: text ? 'gemini' : 'offline_fallback' };
 }
 
 // ---------- HTTP API ----------
