@@ -32,9 +32,10 @@ export const TopAppBar: React.FC<{
   title: string;
   babyName?: string;
   ageDays?: number;
+  careDay?: number;
   settings: SimulationSettings;
   onUpdateSettings: (newSettings: Partial<SimulationSettings>) => void;
-}> = ({ title, babyName, ageDays, settings, onUpdateSettings }) => {
+}> = ({ title, babyName, ageDays, careDay, settings, onUpdateSettings }) => {
   const speeds = [
     { label: '1x', value: 1 },
     { label: '60x', value: 60 },
@@ -48,7 +49,7 @@ export const TopAppBar: React.FC<{
           <h1 className="text-base font-semibold tracking-tight text-stone-100">{title}</h1>
           {babyName && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-amber-950/60 text-amber-200 border border-amber-800/40 font-medium">
-              {babyName} • {ageDays === 0 ? 'Day 1' : `${ageDays}d old`}
+              {babyName} • Day {(careDay ?? 0) + 1}
             </span>
           )}
         </div>
