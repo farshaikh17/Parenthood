@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { API_BASE } from '../ai/apiBase';
 import React, { useState } from 'react';
 import { Baby, BabyState, CareActionRecord, DayLog, JournalEntry, Milestone, Parent, SimulationEvent } from '../types';
 import { getDayLog, summarizeDay } from '../simulation/dayLog';
@@ -74,7 +75,7 @@ export const JournalScreen: React.FC<JournalScreenProps> = ({
     let reflection = '';
     let insight = '';
     try {
-      const response = await fetch('/api/gemini/journal-reflection', {
+      const response = await fetch(`${API_BASE}/api/gemini/journal-reflection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

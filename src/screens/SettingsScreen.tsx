@@ -23,6 +23,8 @@ import {
   Smartphone
 } from 'lucide-react';
 import { HouseholdSync } from '../sync/useHouseholdSync';
+import { canPromptInstall, isIOSDevice, isInstalled, onInstallAvailabilityChange, promptInstall } from '../pwa/install';
+import { Download } from 'lucide-react';
 
 interface SettingsScreenProps {
   settings: SimulationSettings;
@@ -41,6 +43,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   sync,
   babyName
 }) => {
+  const [installTick, setInstallTick] = useState(0);
+  useEffect(() => onInstallAvailabilityChange(() => setInstallTick(t => t + 1)), []);
+  void installTick;
   const [joinCode, setJoinCode] = useState('');
   const [syncBusy, setSyncBusy] = useState(false);
   const [confirmJoin, setConfirmJoin] = useState(false);
@@ -84,7 +89,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <span className="text-[10px] uppercase font-bold text-teal-400 font-mono">Settings</span>
           <h2 className="text-base font-bold text-stone-100 mt-0.5">Settings</h2>
           <p className="text-xs text-stone-400">
-            Version <span className="text-teal-300 font-medium">1.8 (M8)</span>
+            Version <span className="text-teal-300 font-medium">1.9 (M9)</span>
           </p>
         </div>
 
@@ -256,6 +261,28 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <p className="text-[10px] text-stone-500">Android and desktop browsers: works from the browser. iPhone/iPad: only after adding Parenthood to the Home Screen (iOS 16.4 or newer). Nothing about your baby is stored on the alert server except the alert times.</p>
         </div>
       </div>
+
+      {/* Install on this phone (M9) */}
+      {!isInstalled() && (
+        <div className="p-4 rounded-2xl bg-stone-800/40 border border-stone-700/60 flex items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <div className="flex items-center space-x-2 text-xs font-bold text-stone-200">
+              <Download className="w-4 h-4 text-teal-400" />
+              <span>Add to Home Screen</span>
+            </div>
+            <p className="text-[10px] text-stone-400 leading-relaxed">
+              {isIOSDevice()
+                ? 'On iPhone/iPad: tap Share, then "Add to Home Screen". Opens full-screen and can receive night alerts.'
+                : canPromptInstall()
+                  ? 'Installs Parenthood like an app: full-screen, works offline, night alerts possible.'
+                  : 'Use your browser menu → "Install app" / "Add to Home Screen". (The button appears here when the browser allows a direct prompt.)'}
+            </p>
+          </div>
+          {canPromptInstall() && (
+            <button onClick={() => promptInstall()} className="shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-semibold border bg-teal-700 border-teal-600 text-white">Install</button>
+          )}
+        </div>
+      )}
 
       {/* Household sync (M8) */}
       {sync && (
