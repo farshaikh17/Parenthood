@@ -1,0 +1,20 @@
+name = "parenthood-night-alerts"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+
+# Runs every minute and sends any alerts whose time has come.
+[triggers]
+crons = ["* * * * *"]
+
+# Create with:  npx wrangler kv namespace create ALERTS
+# then paste the id below.
+[[kv_namespaces]]
+binding = "ALERTS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+# Public key only. The PRIVATE key is a secret:  npx wrangler secret put VAPID_PRIVATE_KEY
+VAPID_PUBLIC_KEY = "REPLACE_WITH_VAPID_PUBLIC_KEY"
+VAPID_SUBJECT = "mailto:you@example.com"
+# Comma-separated list of sites allowed to call this worker (the app's own URL).
+ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:4173"

@@ -1,0 +1,16 @@
+{
+  "name": "parenthood-night-alerts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "keys": "node scripts/vapid.mjs",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "wrangler": "^4",
+    "@cloudflare/workers-types": "^5",
+    "typescript": "^5"
+  }
+}
