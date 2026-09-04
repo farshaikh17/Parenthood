@@ -32,7 +32,8 @@ describe('M2 — compression clock', () => {
   it('formats developmental age in plain language', () => {
     expect(formatDevelopmentalAge(1)).toBe('1 day old');
     expect(formatDevelopmentalAge(21)).toBe('about 3 weeks old');
-    expect(formatDevelopmentalAge(120)).toBe('about 3 months old');
+    expect(formatDevelopmentalAge(120)).toBe('about 4 months old'); // 120 days ≈ 3.9 months — rounds to the nearest month
+    expect(formatDevelopmentalAge(182)).toBe('about 6 months old');
   });
   it('engine advances developmental age using the settings schedule', () => {
     const settings = createMockSettings({ compressionSchedule: DEFAULT_COMPRESSION_SCHEDULE });

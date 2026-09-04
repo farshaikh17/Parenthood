@@ -79,7 +79,7 @@ export function getCareDayNumber(baby: Baby, settings: SimulationSettings): numb
 export function formatDevelopmentalAge(ageDays: number): string {
   if (ageDays < 14) return `${ageDays} day${ageDays === 1 ? '' : 's'} old`;
   if (ageDays < 84) return `about ${Math.floor(ageDays / 7)} weeks old`;
-  const months = Math.floor(ageDays / 30.4);
+  const months = Math.round(ageDays / 30.4);
   return `about ${months} month${months === 1 ? '' : 's'} old`;
 }
 
