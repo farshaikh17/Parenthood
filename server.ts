@@ -123,6 +123,41 @@ Write 2-3 plain sentences saying which values in the state most likely caused th
     }
   });
 
+  // Six-month journey story — grounded ONLY in the computed journey report the client sends.
+  app.post("/api/gemini/journey-story", async (req, res) => {
+    try {
+      const { report } = req.body || {};
+      const ai = getGeminiClient();
+      if (!ai || !report) return res.json({ paragraphs: [], source: "offline_fallback" });
+
+      const prompt = `You retell the final six-month report of "Parenthood", an educational baby-care SIMULATION, as a short warm story for the parent who just finished it.
+Use ONLY the facts in the report below. Do not invent feeds, illnesses, milestones, relatives, places, or events. No medical claims, no diagnoses, no advice, no scores, no grades, no "research shows".
+Address the parent as "you". Mention the baby by name. 3-4 short paragraphs, 150-220 words total. End with one honest sentence that a simulation compresses and simplifies, and that real babies vary.
+
+REPORT (authoritative, complete):
+${JSON.stringify(report)}
+
+Respond in valid JSON: {"paragraphs": string[]}`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: { responseMimeType: "application/json" },
+      });
+      const text = response.text?.trim() || "{}";
+      try {
+        const parsed = JSON.parse(text);
+        if (!Array.isArray(parsed.paragraphs) || parsed.paragraphs.length === 0) return res.json({ paragraphs: [], source: "offline_fallback" });
+        res.json({ paragraphs: parsed.paragraphs.filter((p: unknown) => typeof p === "string").slice(0, 6), source: "gemini" });
+      } catch {
+        res.json({ paragraphs: [], source: "offline_fallback" });
+      }
+    } catch (error: any) {
+      console.error("Journey Story Error:", error?.message || error);
+      res.json({ paragraphs: [], source: "error_fallback" });
+    }
+  });
+
   // Setup Vite development middleware or static production serving
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
