@@ -206,6 +206,26 @@ Write 2-3 plain sentences saying which values in the state most likely caused th
   return { insight: text && text.length > 20 ? text : factual(), source: text ? 'gemini' : 'offline_fallback' };
 }
 
+async function journeyStory(body: any, env: Env) {
+  const report = body?.report;
+  if (!report) return { paragraphs: [], source: 'offline_fallback' };
+  const prompt = `You retell the final six-month report of "Parenthood", an educational baby-care SIMULATION, as a short warm story for the parent who just finished it.
+Use ONLY the facts in the report below. Do not invent feeds, illnesses, milestones, relatives, places, or events. No medical claims, no diagnoses, no advice, no scores, no grades, no "research shows".
+Address the parent as "you". Mention the baby by name. 3-4 short paragraphs, 150-220 words total. End with one honest sentence that a simulation compresses and simplifies, and that real babies vary.
+
+REPORT (authoritative, complete):
+${JSON.stringify(report)}
+
+Respond in valid JSON: {"paragraphs": string[]}`;
+  const text = await gemini(env, prompt, true);
+  if (!text) return { paragraphs: [], source: 'offline_fallback' };
+  try {
+    const parsed = JSON.parse(text);
+    if (!Array.isArray(parsed.paragraphs) || parsed.paragraphs.length === 0) return { paragraphs: [], source: 'offline_fallback' };
+    return { paragraphs: parsed.paragraphs.filter((p: unknown) => typeof p === 'string').slice(0, 6), source: 'gemini' };
+  } catch { return { paragraphs: [], source: 'offline_fallback' }; }
+}
+
 // ---------- HTTP API ----------
 
 function corsHeaders(req: Request, env: Env): Record<string, string> {
