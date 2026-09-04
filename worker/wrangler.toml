@@ -10,14 +10,16 @@ crons = ["* * * * *"]
 # then paste the id below.
 [[kv_namespaces]]
 binding = "ALERTS"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "744116b75ada4aada1f5f79e402d3f31"
 
 [vars]
 # Public key only. The PRIVATE key is a secret:  npx wrangler secret put VAPID_PRIVATE_KEY
-VAPID_PUBLIC_KEY = "REPLACE_WITH_VAPID_PUBLIC_KEY"
-VAPID_SUBJECT = "mailto:you@example.com"
+VAPID_PUBLIC_KEY = "BOnL_Dk7V84MvxUwPyd243hZFdRomhcHYZy5kGGMoDp62b1lZfG2H2St7IqbbPxjwQMcNTRcP_5gv1KTL_h3IfY"
+VAPID_SUBJECT = "mailto:farshaikh17@gmail.com"
 # Comma-separated list of sites allowed to call this worker (the app's own URL).
-ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:4173"
+# "*" = any site may call this Worker (data is only reachable with an unguessable household code).
+# After publishing the app, replace "*" with the app's exact URL for tighter security.
+ALLOWED_ORIGINS = "*"
 
 # Household sync between two phones (M8). Create with:
 #   npx wrangler d1 create parenthood
@@ -26,4 +28,4 @@ ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:4173"
 [[d1_databases]]
 binding = "DB"
 database_name = "parenthood"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "adcd3e60-0259-4f65-a1b0-2a159ce18c14"
