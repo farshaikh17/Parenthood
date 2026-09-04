@@ -89,7 +89,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <span className="text-[10px] uppercase font-bold text-teal-400 font-mono">Settings</span>
           <h2 className="text-base font-bold text-stone-100 mt-0.5">Settings</h2>
           <p className="text-xs text-stone-400">
-            Version <span className="text-teal-300 font-medium">1.9 (M9)</span>
+            Version <span className="text-teal-300 font-medium">2.0 (M10)</span>
           </p>
         </div>
 
