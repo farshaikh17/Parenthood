@@ -60,6 +60,7 @@ import { ParentStatusScreen } from './screens/ParentStatusScreen';
 import { EventHistoryScreen } from './screens/EventHistoryScreen';
 import { JournalScreen } from './screens/JournalScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { JourneyReportScreen } from './screens/JourneyReportScreen';
 
 // Load saved data and apply the away policy (bounded autopilot catch-up). See simulation/autopilot.ts.
 function getInitialDataWithCatchup() {
@@ -569,6 +570,21 @@ export default function App() {
           />
         )}
 
+        {currentScreen === 'journey_report' && baby && babyState && (
+          <JourneyReportScreen
+            baby={baby}
+            babyState={babyState}
+            parents={parents}
+            userProfile={userProfile}
+            actionRecords={actionRecords}
+            events={events}
+            dayLogs={dayLogs}
+            milestones={milestones}
+            onKeepGoing={() => setCurrentScreen('dashboard')}
+            onStartAgain={handleResetSimulation}
+          />
+        )}
+
         {currentScreen === 'settings' && (
           <SettingsScreen
             settings={settings}
@@ -587,9 +603,12 @@ export default function App() {
         </div>
       )}
       {isMainScreen && journeyComplete && (
-        <div className="px-4 py-2 text-[11px] text-teal-100 bg-teal-950/80 border-t border-teal-800 text-center">
-          {baby?.name} has reached six months. The final report arrives in a later update — you can keep caring for now.
-        </div>
+        <button
+          onClick={() => setCurrentScreen('journey_report')}
+          className="px-4 py-2 text-[11px] text-teal-100 bg-teal-950/80 border-t border-teal-800 text-center w-full hover:bg-teal-900/80"
+        >
+          {baby?.name} has reached six months 🎉 — tap to see your journey report. You can keep caring afterwards.
+        </button>
       )}
       {isMainScreen && <Disclaimer />}
 

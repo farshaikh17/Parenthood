@@ -326,4 +326,5 @@ export type AppScreen =
   | 'parent_status'
   | 'event_history'
   | 'journal'
-  | 'settings';
+  | 'settings'
+  | 'journey_report';
