@@ -37,7 +37,7 @@ import {
 import { INITIAL_MILESTONES } from './simulation/initialData';
 import { soundFx } from './utils/audio';
 import { NightAlert } from './components/NightAlert';
-import { predictNightWakes } from './simulation/nightPredictor';
+import { predictCareAlerts } from './simulation/carePredictor';
 import { scheduleAlerts, showLocalNightNotification } from './notifications/pushClient';
 import { ensurePersonality } from './simulation/personality';
 import { useHouseholdSync, RemoteApplyInfo } from './sync/useHouseholdSync';
@@ -60,6 +60,7 @@ import { ParentStatusScreen } from './screens/ParentStatusScreen';
 import { EventHistoryScreen } from './screens/EventHistoryScreen';
 import { JournalScreen } from './screens/JournalScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { NotificationPermissionScreen } from './screens/NotificationPermissionScreen';
 import { JourneyReportScreen } from './screens/JourneyReportScreen';
 
 // Load saved data and apply the away policy (bounded autopilot catch-up). See simulation/autopilot.ts.
@@ -256,9 +257,10 @@ export default function App() {
     const onVisible = () => {
       if (!baby || !babyState) return;
       if (document.visibilityState === 'hidden') {
-        // Before you look away, predict tonight's wakings and hand them to the push server (if configured)
-        if (settings.nighttimeAlertsEnabled && userProfile) {
-          const alerts = predictNightWakes(baby, babyState, parents, settings, Date.now());
+        // Before you look away, predict the baby's next needs (feeds, night wakings) plus
+        // "don't forget" check-ins, and hand those child updates to the push server (if configured)
+        if (userProfile) {
+          const alerts = predictCareAlerts(baby, babyState, parents, settings, Date.now());
           scheduleAlerts(userProfile.id, alerts);
         }
         return;
@@ -371,7 +373,7 @@ export default function App() {
     setBabyState(initialBabyState);
     setUserProfile(prev => prev ? { ...prev, onboardingCompleted: true } : null);
     setSettings(prev => ({ ...prev, simulatedTimeMs: Date.now(), lastRealTimestampMs: Date.now(), isPaused: false }));
-    setCurrentScreen('dashboard');
+    setCurrentScreen('notification_permission');
     soundFx.playSuccessChime();
   };
 
@@ -502,6 +504,14 @@ export default function App() {
             unitSystem={settings.unitSystem}
             onComplete={handleBabyCreation}
             onBack={() => setCurrentScreen('difficulty_select')}
+          />
+        )}
+
+        {currentScreen === 'notification_permission' && baby && userProfile && (
+          <NotificationPermissionScreen
+            babyName={baby.name}
+            userId={userProfile.id}
+            onDone={() => setCurrentScreen('dashboard')}
           />
         )}
 

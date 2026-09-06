@@ -321,6 +321,7 @@ export type AppScreen =
   | 'parent_profile'
   | 'difficulty_select'
   | 'create_baby'
+  | 'notification_permission'
   | 'dashboard'
   | 'needs_status'
   | 'parent_status'
