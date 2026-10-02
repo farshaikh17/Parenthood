@@ -79,7 +79,7 @@ The sync design uses versioned saves and compare-and-set behavior so two devices
 
 ## Current status
 
-The application logic and Cloudflare Worker implementation are in the repository. The Worker-dependent features (including end-to-end push notifications and two-device sharing) still require deployment and production configuration.
+The application logic and Cloudflare Worker implementation are in the repository. The Cloudflare integration reported a successful deployment of `parenthood-night-alerts` for the portfolio branch on 2 October 2026. That deployment report does not establish end-to-end operation of push notifications, household sharing, or AI endpoints; each still needs configuration and behavior checks in its target environment.
 
 This is an active product experiment, not medical advice and not a validated assessment of someone's readiness to become a parent.
 
@@ -96,11 +96,13 @@ This is an active product experiment, not medical advice and not a validated ass
 
 ## Development approach
 
-I am not positioning this project as evidence that I am a traditional software engineer.
-
-My role and strength are **product/system thinking + AI-assisted technical building**: defining the problem, designing the behavior and architecture, directing implementation, validating the result, and using modern AI tools to dramatically increase the amount I can build.
+My role and strength are **product/system thinking + AI-assisted technical building**: defining the problem, designing the behavior and architecture, directing implementation, validating the result, and using AI tools to generate and iterate on code.
 
 That is the same approach I use across automation, CRM, internal-tool, implementation, and technical-operations work.
+
+## Demo and validation opportunities
+
+A useful walkthrough would show one care cycle, away-care catch-up, and an event-grounded journal. Use a fresh simulation with synthetic names. Demonstrate household sharing and push notifications only after testing them across devices. Screenshots and measured user outcomes have not yet been added.
 
 ---
 
